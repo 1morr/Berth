@@ -30,3 +30,4 @@ Jellyfin 沒刮到 TMDB id 的作品，`media_read_media` 找不到，模型只�
 - 電影的 `episodes` 是 `None`，交給模型前由 `MODEL_VIEWS["inventory.find_in_library"]` 拿掉這一格；劇集讀得到集數時也一併拿掉空的 `episodes_note`。
 - 同一部劇被幾個名字對到只讀一次集數；一次查詢最多讀 `FIND_EPISODE_READS`（20）部，超出的那一格是空的、`episodes_note` 說沒讀（60 個名字全中的極端情形不至於一次送出數百支請求）。要讀的是「從允許清單上的媒體庫清單（`index`）讀到的劇」，`JellyfinAccess` 因此也把那幾部 id 記成可問集數的（與 `locate` 確認過的同一條閘門；清單本身先擋媒體庫）。
 - 讀失敗只影響那一部（清單已讀到、集數這一支失敗時）：`JellyfinUnreachableError` 的原文、`ItemNotVisibleError` 的說明寫進 `episodes_note`，整次呼叫照常回；另一部劇的集數照樣有。
+- code-review 未採的兩項（都是取捨）：`episodes`／`episodes_note` 沒有合併成一個小型的值物件（兩個欄位已經由一個建構點寫明，還不需要型別）；`_compact_find_in_library` 就地 `pop`（那份是 `to_jsonable_python` 剛產生的，不動到別人的資料）。
