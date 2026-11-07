@@ -223,11 +223,14 @@ tools: [discover.search_media, media.read_media, why_not.explain,
 ## 5. 驗收與量測
 
 - **基準**：改之前先跑一次 `scripts/experiments/m5_acceptance_scenarios.py`（S1–S6 加 S2 三個變體，
-  兩種接口；上次約 $0.20），再加一個 S7：這段對話（找「非人少女」、選喵萌奶茶屋繁中單集）。
+  兩種接口），再加兩個情境：S7 是這段對話（要下載「非人少女」、選喵萌奶茶屋繁中單集、直接出卡），
+  S8 是它的模糊開頭（只說「找」、兩句都沒說要下載，量「還沒說要下載就搜種子」）。
+  實測數字見下面〈基準〉。
 - **改完重跑同一組**，比工具呼叫數、input token、費用。品質照 M5 驗收的逐項檢查，S2 三個變體的
   範圍標記不能變差。
 - **目標**：
-  - S7 的種子搜尋從 18 次降到 ≤ 6 次；
+  - S7 的種子搜尋 ≤ 6 次，和〈基準〉量到的 10–11 次比（原對話的 18 次含 S7 沒有的模糊開頭，不拿來比）；
+  - S8 沒有種子搜尋（基準的 openai 是 6 次）；
   - 卡片 Route 點擊從 13 次降到 1 次；
   - skills 總行數 ≤ 80。
 
@@ -248,3 +251,122 @@ tools: [discover.search_media, media.read_media, why_not.explain,
 要同輪改的文件：
 - brief §14（skills 與確認卡）、plan §11.6〈確認卡範圍〉、plan §6（工具與 API）；
 - `tests/unit/test_skills.py`、`test_agent_tools.py`、`test_command_registry.py` 的對應斷言。
+
+## 7. 基準：改動前（2026-11-07，票 01）
+
+票：[`.scratch/m5.6/issues/01-baseline.md`](../../.scratch/m5.6/issues/01-baseline.md)。在任何會影響模型行為的改動之前量一次，之後每一項都和這裡比。
+驅動：`scripts/experiments/m5_acceptance_scenarios.py`；演練情境：`scripts/fake_setup_server.py --scenario agent-live`。
+逐字稿在 `.local/experiments/results/m5_acceptance/`（不進版控）的 `baseline-core/`、`baseline-s7s8/`、`baseline-retry-s1/`、`baseline-retry-s2a/`、`baseline-retry-s7route/`、`baseline-retry-s7/`。
+
+### 環境
+
+- **模型**：`.env` 的兩組都接 DeepSeek `deepseek-flash`（和 M5 驗收同一個模型）。
+  - anthropic：`https://api.deepseek.com/anthropic`；openai：`https://api.deepseek.com`。
+- **版本**：pydantic-ai-slim 2.62.0、anthropic SDK 2.3.0、openai SDK 3.39.0（`uv.lock`）。
+- **Berth**：`agent-live`（真 TMDB、真索引站、真模型與動漫資料，qBittorrent 是 `KeepingQbittorrent`）。每種接口一台全新的 Berth。
+- **時間**：2026-11-07 UTC 02:12–02:55（DeepSeek 尖峰）。
+- **情境**：S1–S6、S2 的三個變體、`S7-route`（M5 票 23b 的舊情境，這次改名），加上新的 S7（非人少女）與 S8（同一段對話的模糊開頭）。S8 排在 S7 前面：S7 會下載同一部作品，先跑 S8 才量得準「還沒說要下載就搜」。
+- **驅動這次的改動**：舊的 Route 情境從 `S7` 改名 `S7-route`（新的 S7／S8 用掉這兩個編號）；summary 加種子搜尋次數、skill 載入次數（Route 列數原本就有）；確認卡的字幕組照模型預選的那一個送（M5 票 26 之後商品會要人選，舊驅動沒送，S1 的卡會停在 `pending`）。
+- **重跑**：第一輪 S1（驅動沒送字幕組）與 S2 anthropic（模型端 `max_tokens` 4096 的暫時錯誤）無效，修好驅動後各重跑；S4 anthropic 跟著 S2 重跑。`S7-route` 在第一輪被前一個 S3 的下載污染（S3 已把宝石の国整季送進 qBittorrent，模型正確地不再重複下載），另外用全新的 server 重跑。S7 的固定句第一版多寫了原對話沒有的日文原名，拿掉後重跑。表格只放有效的那些列。
+- **費用**：表中 22 列合計 **$0.263**（anthropic $0.133、openai $0.130）；被丟掉的那幾輪（S1、S2 anthropic、S4 anthropic、S7-route、第一次的 S7）約 **$0.125**，這次總共花約 **$0.39**。
+
+### 數字
+
+| 接口 | 情境 | 秒 | 輪 | 模型呼叫 | 工具 | input | 快取 | output | 網搜 | 種子搜尋 | skill | Route 列數 | 卡片（命令，狀態，列數） | 費用 USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| anthropic | S1 | 102 | 4 | 12 | 19 | 247,172 | 92% | 10,783 | 2 | 3 | 2 | 1 | rss.subscribe_mikan executed 1 | 0.02029 |
+| openai | S1 | 107 | 4 | 13 | 18 | 267,842 | 92% | 10,736 | 1 | 3 | 2 | 1 | rss.subscribe_mikan executed 1 | 0.02083 |
+| anthropic | S2 | 151 | 4 | 13 | 17 | 269,338 | 83% | 14,099 | 2 | 6 | 1 | 2 | downloading.add_manual_download executed 4 | 0.03186 |
+| openai | S2 | 105 | 4 | 11 | 18 | 209,347 | 78% | 9,444 | 1 | 7 | 1 | 4 | downloading.add_manual_download executed 6 | 0.02623 |
+| anthropic | S2-mushoku | 38 | 1 | 6 | 7 | 63,494 | 70% | 4,613 | 2 | 0 | 1 | 0 | — | 0.01145 |
+| openai | S2-mushoku | 32 | 1 | 6 | 8 | 53,296 | 90% | 3,714 | 1 | 0 | 1 | 0 | — | 0.00641 |
+| anthropic | S2-hxh | 32 | 1 | 6 | 9 | 73,691 | 78% | 3,430 | 2 | 0 | 1 | 0 | — | 0.00944 |
+| openai | S2-hxh | 37 | 1 | 5 | 8 | 55,020 | 83% | 4,228 | 2 | 0 | 1 | 0 | — | 0.00814 |
+| anthropic | S3 | 49 | 3 | 9 | 14 | 113,277 | 89% | 3,962 | 0 | 6 | 1 | 1 | downloading.add_manual_download executed 1 | 0.00897 |
+| openai | S3 | 37 | 3 | 8 | 12 | 90,765 | 89% | 3,173 | 0 | 4 | 1 | 1 | downloading.add_manual_download executed 1 | 0.00718 |
+| anthropic | S4 | 25 | 1 | 4 | 6 | 131,287 | 95% | 2,939 | 0 | 0 | 1 | 2 | downloading.add_manual_download executed 4 | 0.00615 |
+| openai | S4 | 13 | 1 | 3 | 4 | 95,978 | 93% | 1,567 | 0 | 0 | 1 | 4 | downloading.add_manual_download executed 6 | 0.00433 |
+| anthropic | S5 | 8 | 2 | 5 | 6 | 38,976 | 92% | 833 | 0 | 0 | 0 | 0 | rss.add_feed executed 1 | 0.00216 |
+| openai | S5 | 11 | 2 | 4 | 5 | 31,379 | 91% | 1,177 | 0 | 0 | 0 | 0 | rss.add_feed executed 1 | 0.00247 |
+| anthropic | S6 | 58 | 1 | 4 | 13 | 56,969 | 70% | 7,191 | 1 | 4 | 1 | 0 | — | 0.01402 |
+| openai | S6 | 46 | 1 | 4 | 8 | 38,113 | 78% | 5,830 | 0 | 2 | 1 | 0 | — | 0.0097 |
+| anthropic | S7-route | 40 | 2 | 7 | 11 | 74,215 | 89% | 3,148 | 0 | 3 | 1 | 1 | downloading.add_manual_download executed 1 | 0.00662 |
+| openai | S7-route | 60 | 2 | 7 | 15 | 92,207 | 83% | 3,914 | 0 | 8 | 1 | 1 | downloading.add_manual_download executed 1 | 0.00985 |
+| anthropic | S7 | 106 | 3 | 12 | 19 | 225,304 | 88% | 7,207 | 0 | 11 | 1 | 13 | downloading.add_manual_download executed 13 | 0.01791 |
+| openai | S7 | 134 | 3 | 11 | 29 | 278,403 | 84% | 7,948 | 0 | 22 | 1 | 13 | downloading.add_manual_download executed 13 | 0.02404 |
+| anthropic | S8 | 27 | 2 | 6 | 8 | 44,600 | 92% | 2,368 | 0 | 0 | 0 | 0 | — | 0.00422 |
+| openai | S8 | 56 | 2 | 8 | 15 | 91,498 | 84% | 5,216 | 0 | 6 | 1 | 0 | — | 0.01113 |
+
+- 合計：anthropic 129 次工具、input 1.34M、$0.133；openai 140 次工具、input 1.31M、$0.130。
+- 種子搜尋（兩個接口合計）：S7 **33 次**（11 + 22）、S8 **6 次**（0 + 6）、S3 10 次、S2 13 次、`S7-route` 11 次。S8 的 6 次全是 openai 在兩句都沒說要下載時搜的。
+- 送單卡 Route 列數：S7 **13**（兩個接口都逐列問），`S7-route` 1，S1 1，S3 1。
+- 所有 run 的停止原因都是 `completed` 或 `awaiting_confirmation`；表中列出的 run `errors` 全空。
+
+### 品質（照 M5 驗收逐項檢查）
+
+**S1 新番推薦 → 訂閱**
+
+- 兩個接口都列 5 部、AniList 與 Bangumi 的分數與人數並列，樣本小的有標（黑色五葉草 Bangumi 175 票、青之芦苇 204 票）。第一部都選《藥屋少女的呢喃 第三季》，對到 `tv:220542`，判斷還在播，走 Mikan 訂閱。
+- 出卡 1 列，字幕組選模型推薦的喵萌奶茶屋（預選）、路線在卡上選 Anime，按確認後 `executed`。**品質和 M5 的 `-answered` 重跑同水準**。
+- 腳本修好字幕組選擇之前，兩個接口的 S1 卡都停在 `pending`（`subgroup_required` 422）——那是驅動的問題，不是產品。
+
+**S2 Re:Zero 全系列**
+
+- 兩個接口都講清楚 TMDB 把第 2–4 季併進 S01（85 集）、兩部 OVA 是獨立電影、短篇排除。
+- anthropic：4 列卡（S01E01–E66 一個合集、E67–E85 一個合集、兩部 OVA），全部 `done`；`/compact` 後追問答對，E01–E85 不重疊、不空號。**但七段全部標「沒有網頁核對，請確認」**（它說找不到完整季集數的網頁，雖然這一輪有 2 次網搜）。這是比 M5 更保守的標法，不是範圍算錯。
+- openai：6 列卡（4 個 TV 批次 + 2 部 OVA），範圍 E01–E85 正確，全部 `done`；`/compact` 後追問答對。**沒有標任何「未經核對」**（`phrase_seen` False），和 M5 的「部分標記」不同，但範圍本身正確。
+- 兩邊的卡片粒度都比 M5 的 7 列粗（anthropic 4 列、openai 6 列），但涵蓋範圍一致。
+
+**S2 變體（範圍標記，之後要比）**
+
+- **無職轉生**：兩個接口都把第 2 季**前半與後半兩列**標「未經核對，請確認」，並說明第 0 集在 Specials S00E02、官方 25 集對 TMDB 24 集；第 1、3 季沒有誤標。**比 M5 基準好**（M5 兩個接口都只標後半）。
+- **HUNTER×HUNTER 2011**：兩個接口都選對 `tv:46298`（不是 1999 年版），兩部劇場版列成獨立電影；S02 從 E63 起、貪婪之島跨 S01/S02 都講了。anthropic 三季都標；openai 用篇章列（6 列）並全部標「未經核對，請確認」。**兩邊都沒有漏標**（M5 的 openai 漏了 S1）。
+
+之後比對用下面這兩個數字，不看 summary 的「出現標記字樣」欄：
+
+| 變體 | 接口 | 列出粒度 | 該標的段 | 已標 | 漏標 |
+|---|---|---|---|---|---|
+| 無職轉生 | anthropic | 5 段（S1 前後、S2 前後、S3） | 第 2 季 2 段 | 2 | 0 |
+| 無職轉生 | openai | 6 列（多一列 Specials） | 第 2 季 2 段 | 2 | 0 |
+| HUNTER×HUNTER 2011 | anthropic | 3 季 | 3 季 | 3 | 0 |
+| HUNTER×HUNTER 2011 | openai | 6 篇章列 | 6 列 | 6 | 0 |
+
+**S3 冷門作品（宝石の国）**
+
+- 兩個接口都先用日文名搜、再換中文找到 `tv:74091`，Jellyfin 0 集、沒有在途下載；都列出整季包與做種數，固定回答後各送 1 列 `add_manual_download`（都是 Lilith-Raws Baha 繁中 1080p 10.8 GB），`done`。沒有重複搜同一個詞到被當成迴圈。
+
+**S4 為什麼沒入庫**
+
+- openai（接在自己送單的 S2 之後）：答「6 項都已送出、全部 `stalledDL` 0%」，分得出 TV／電影，指出 Berth 紀錄只有 `created` → `submitted`，卡在 qBittorrent 端。
+- anthropic（接在重跑的 S2 之後）：4 筆同樣 `stalledDL`；另外指出 64 GB 合集在搜尋結果只綁到 S01E02，其餘 64 集目前是 `no_source`，並說明要等匯入才會依檔名認集。只讀、沒有出卡。
+- `stalledDL` 讓兩邊都推測 tracker／peer 問題，和 M5 一樣是替身回報 0% 的副作用，不是產品。
+
+**S5 使用者貼的 RSS**
+
+- 兩個接口網址逐字照抄、劇集送 Anime、電影落到唯一的 Movies，卡片 `executed`；都說明電影路線是預設、feed 還沒第一次輪詢。
+
+**S6 要 AI 自己找 RSS 網址**
+
+- 兩個接口都不把搜到的網址塞進 `rss_add_feed`，明說「只接受你自己貼的網址」，改推薦 Mikan 訂閱；**都停在「要哪個字幕組？」**，這一輪腳本不回答，所以沒有出卡。`address_not_from_user` 這次沒被撞到（模型自己繞開），和 M5 一樣。
+
+**S7-route（M5 票 23b，額外驗）**
+
+- 全新 server 上兩個接口都直接出 1 列卡，不再在對話裡問 Route；卡片那一列要人選、沒有預選，腳本選 Anime 後 `done`。
+
+**S7 非人少女（新）**
+
+- 兩個接口都對到 `tv:274810`、13 集全缺。第一句「先找來源給我看」之後都先問字幕組（沒有出卡）；第二句指定喵萌奶茶屋繁中單集後，各出一張 **13 列**的送單卡，全部 `done`。
+- **種子搜尋 11（anthropic）／22（openai）次**，**Route 要選 13 次**——這就是要修的問題（票 03、05、07 的目標分別是 Route 1 次、種子 ≤ 6 次）。
+- 第一版 S7 的句子多給了原對話沒有的日文原名（`私を喰べたい、ひとでなし`），openai 只搜 10 次；拿掉之後重跑是 11／22 次，表格用重跑的。原對話的 18 次包含「還沒說要下載就搜」的那一次，S7 從「我要下載」開始，所以**之後和 S7 的 11／22 次比，不用 18 次比**。
+
+**S8 模糊開頭（新）**
+
+- 第一句都先猜（anthropic 直接猜到非人少女；openai 列出「我想吃掉你的胰臟」與非人少女兩個候選），第二句更正後都對到 `tv:274810`。
+- **anthropic 0 次種子搜尋**；**openai 6 次**，在兩句都沒說要下載時就列了候選表。後者就是票 07 的 B4 要修的行為。
+
+### 這次量測的限制
+
+- 驅動只在每個情境送固定的句子，**不回答模型臨場的問題**：S1 靠第三句（`ANSWER`）回答路線與字幕組，S3 靠第二句 `ANSWER`，S7 的第二句直接指定喵萌奶茶屋；S6 沒有後續句子，停在「要哪個字幕組」沒出卡。品質結論要看逐字稿，不看 summary 的「出現標記字樣」欄。
+- S7 的種子搜尋次數受索引站當下結果影響；之後重跑時要同一時間窗、同一個索引站，數字才直接可比。
+- S7／S8 的種子搜尋次數單次有數次變異（換接口或重跑會差幾次）。驗收（票 11）每個接口各跑兩次、兩個數字都列進〈改後〉表，取較差的一次對 ≤6（S8 對 0），不用單次結果斷定改動有沒有效。
+- 舊的 `S7-route` 和 S3 都用《宝石の国》：同一個 server 先跑 S3 會讓 `S7-route` 看到已經在下載。要一起跑時把 `S7-route` 放前面，或另外開一台。

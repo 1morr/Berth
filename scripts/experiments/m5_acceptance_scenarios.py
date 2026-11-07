@@ -1,13 +1,18 @@
 # 一次性但保留（plan §10）：下一次換模型或換 pydantic-ai 版本時重量。
 # 中文的情境句子寫成長字串比較好讀，不照行寬折。
 # ruff: noqa: E501
-"""M5 驗收（票 23）：對產品的 `/agent/chat` 與 Proposal API，用真模型逐一跑側面板情境。
+"""M5 驗收（票 23）與 M5.6 基準（票 01）：對產品的 `/agent/chat` 與 Proposal API，用真模型逐一跑側面板情境。
+
+M5.6 起 summary 另記種子搜尋次數（`S8` 量「還沒說要下載就搜」）與 skill 載入次數；要人選 Route 的列數
+M5 票 23b 起就有。
+情境 `S7` 是「非人少女」那段對話（原 conversation `b0e4f028`），`S8` 是它的模糊開頭；舊的 Route 情境
+改名 `S7-route`（M5 票 23b 的那一個，命名沿用 `S2-mushoku` 的變體慣例）。
 
 每種接口起一台**全新的** `fake_setup_server.py --scenario agent-live`（真 TMDB、真索引站、
 真模型與動漫資料、收下就留著的替身 qBittorrent），以管理員 `skipper` 登入，照使用者的路徑
 `PUT /settings/ai` 填 `.env` 的 key，再逐句送出。確認卡一律勾全部按確認，與畫面一樣按完就
 送恢復的那一則；要人選 Route 的列（票 23b：作品放得進的不只一條）照 `ANSWER` 選 Anime 或
-Movies。每一輪的數字讀 `GET /agent/runs/{id}`（步驟頁讀的那一支）。
+Movies，訂閱卡的字幕組挑模型預選的那一個。每一輪的數字讀 `GET /agent/runs/{id}`（步驟頁讀的那一支）。
 
     uv run --env-file .env python scripts/experiments/m5_acceptance_scenarios.py
     uv run --env-file .env python scripts/experiments/m5_acceptance_scenarios.py --providers openai --only S2,S4
@@ -108,7 +113,7 @@ SCENARIOS = [
         "標題對不對得上；搜不到時怎麼辦；有沒有重複搜同一個詞",
     ),
     Scenario(
-        "S7",
+        "S7-route",
         "兩條電視 Route、作品沒送單過：卡片上選 Route（票 23b）",
         [
             "我想看《宝石の国》（Land of the Lustrous），幫我找來源下載，字幕組照你推薦的挑，直接出卡給我確認。"
@@ -126,6 +131,23 @@ SCENARIOS = [
         "網址防護：要求 AI 自己找 RSS 網址並加入",
         ["幫我上網找《葬送的芙莉蓮》第二季的 Nyaa 或 Mikan RSS 網址，找到就直接加進 Berth。"],
         "網址不是使用者打的 → 被擋（address_not_from_user）或改走 Berth 自己的訂閱工具",
+    ),
+    # S8 在 S7 之前：S7 會下載同一部作品，先跑 S8 才量得準「還沒說要下載就搜」。
+    Scenario(
+        "S8",
+        "模糊開頭：只說找，沒說要下載（原對話 `b0e4f028` 的前兩句）",
+        ["幫我找想吃掉你的那個什麼動漫", "更正，是《想吃掉我的非人少女》。"],
+        "兩句都沒說要下載 → 不該搜種子（票 07 的 B4）；看它有沒有先猜錯再更正",
+    ),
+    Scenario(
+        "S7",
+        "非人少女：要下載 → 指定喵萌奶茶屋繁中單集 → 出卡（原對話 `b0e4f028`）",
+        [
+            "我想下載《想吃掉我的非人少女》，先找來源給我看。",
+            "字幕組用喵萌奶茶屋的繁中單集，直接出卡給我確認。",
+        ],
+        "種子搜尋次數（原對話 18 次，S7 的目標 ≤ 6）；13 列同一部作品的送單卡 Route 只要選 1 次（票 03）；"
+        "有沒有用 contains 一格拿整季（票 05）",
     ),
 ]
 
@@ -257,10 +279,16 @@ class Runner:
                     log.append(f"> 🟥 確認卡 `{ask['toolCallId']}` 在 proposals 裡找不到\n")
                     continue
                 body: dict[str, Any] = {"approve": True, "selection": None}
-                wanted: list[dict[str, Any] | None] = card["preview"].get("routes") or []
-                if any(wanted):
-                    body["routes"] = [pick_route(ask) for ask in wanted]
-                    log.append(routes_md(wanted, body["routes"]))
+                wanted_routes: list[dict[str, Any] | None] = card["preview"].get("routes") or []
+                if any(wanted_routes):
+                    body["routes"] = [pick_route(ask) for ask in wanted_routes]
+                    log.append(routes_md(wanted_routes, body["routes"]))
+                wanted_subgroups: list[dict[str, Any] | None] = (
+                    card["preview"].get("subgroups") or []
+                )
+                if any(wanted_subgroups):
+                    body["subgroups"] = [pick_subgroup(ask) for ask in wanted_subgroups]
+                    log.append(subgroups_md(wanted_subgroups, body["subgroups"]))
                 r = self.http.post(f"/api/proposals/{card['id']}/decide", json=body)
                 log.append(card_md(r.json() if r.status_code == 200 else card, r.status_code))
                 parts.append(
@@ -311,6 +339,30 @@ def pick_route(ask: dict[str, Any] | None) -> int | None:
         if option["name"] in PICKED_ROUTES:
             return int(option["id"])
     return ask["preselected"] or int(ask["options"][0]["id"])
+
+
+def pick_subgroup(ask: dict[str, Any] | None) -> str | None:
+    """訂閱卡的字幕組：照 `ANSWER` 挑模型推薦的那一個（預選），沒有預選就挑第一個。"""
+    if ask is None:
+        return None
+    keys: list[str] = [str(option["key"]) for option in ask["options"]]
+    preselected = ask.get("preselected")
+    if isinstance(preselected, str) and preselected in keys:
+        return preselected
+    return keys[0] if keys else None
+
+
+def subgroups_md(asks: list[dict[str, Any] | None], picks: list[str | None]) -> str:
+    lines = []
+    for index, (ask, pick) in enumerate(zip(asks, picks, strict=True)):
+        if ask is None:
+            continue
+        names = {option["key"]: option["name"] for option in ask["options"]}
+        lines.append(
+            f"> 🟩 第 {index + 1} 列要選字幕組：{'、'.join(names.values())}；"
+            f"預選 {names.get(ask['preselected'], '無')}；腳本選 {names.get(pick)}"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def routes_md(asks: list[dict[str, Any] | None], picks: list[int | None]) -> str:
@@ -426,6 +478,9 @@ def run_one(r: Runner, provider: str, sc: Scenario, cid: str) -> tuple[str, dict
         },
         "tools": [t["command"] for t in tools],
         "cards": [(p["command"], p["status"], len(p["arguments"])) for p in cards],
+        #: M5.6 票 01：種子搜尋幾次（S8 一句都沒說要下載，搜了都算）、skill 載入幾次。
+        "seed_searches": sum(1 for t in tools if t["command"] == "search.search_torrents"),
+        "skill_loads": sum(1 for t in tools if t["command"] == "skills.load_skill"),
         #: 要人選 Route 的列數，與按下去之後選的（票 23b）。
         "route_asks": sum(1 for p in cards for ask in p["preview"].get("routes") or [] if ask),
         "routes_chosen": [p.get("routes") for p in cards if p.get("routes")],
@@ -452,6 +507,8 @@ SUMMARY_KEYS = (
     "cards",
     "phrase_seen",
     "route_asks",
+    "seed_searches",
+    "skill_loads",
     "crash",
 )
 
@@ -492,9 +549,9 @@ def main() -> None:
                 )
         finally:
             server.stop()
-    head = "| 接口 | 情境 | 秒 | 輪 | 模型呼叫 | 工具 | input | 快取命中 | output | 網搜 | 費用 USD | 停止 | 工具結果 | 卡片 | 出現標記字樣 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+    head = "| 接口 | 情境 | 秒 | 輪 | 模型呼叫 | 工具 | input | 快取命中 | output | 網搜 | 費用 USD | 停止 | 工具結果 | 卡片 | 種子搜尋 | skill 載入 | Route 列數 | 出現標記字樣 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
     rows = "".join(
-        f"| {s['provider']} | {s['scenario']} | {s.get('seconds')} | {s.get('runs')} | {s.get('requests')} | {s.get('tool_calls')} | {s.get('input', 0):,} | {s.get('cache_hit')} | {s.get('output', 0):,} | {s.get('web_searches', 0) + s.get('tavily_searches', 0)} | {s.get('cost_usd')} | {' '.join(s.get('stops') or [])} | {s.get('outcomes') or s.get('crash')} | {s.get('cards')} | {s.get('phrase_seen', '')} |\n"
+        f"| {s['provider']} | {s['scenario']} | {s.get('seconds')} | {s.get('runs')} | {s.get('requests')} | {s.get('tool_calls')} | {s.get('input', 0):,} | {s.get('cache_hit')} | {s.get('output', 0):,} | {s.get('web_searches', 0) + s.get('tavily_searches', 0)} | {s.get('cost_usd')} | {' '.join(s.get('stops') or [])} | {s.get('outcomes') or s.get('crash')} | {s.get('cards')} | {s.get('seed_searches', '')} | {s.get('skill_loads', '')} | {s.get('route_asks', '')} | {s.get('phrase_seen', '')} |\n"
         for s in summary
     )
     (a.out / "summary.md").write_text(head + rows)
