@@ -129,6 +129,13 @@ uv run python scripts/experiments/sweep_loop_lag.py --series 2000 --issues 1000 
 python scripts/experiments/season_token_compare.py http://127.0.0.1:19784 <Prowlarr API key>   # 或設 PROWLARR_URL / PROWLARR_API_KEY；Windows 主控台加 PYTHONIOENCODING=utf-8
 ```
 
+只有一季的作品整季缺時問哪一種（M5.6 票 02）：同一台 Prowlarr 上比「名字 第1季／`S01`／`Season 1`」與名字本身，
+單季兩部、多季兩部當對照。不用容器；查詢間隔 3.5 秒、共 12 次：
+
+```bash
+python scripts/experiments/single_season_marks.py http://127.0.0.1:9696 <Prowlarr API key>   # 或設 PROWLARR_URL / PROWLARR_API_KEY
+```
+
 1,000 部的媒體庫上量 Berth（M2 票 11，plan §11.3 決定 2 的門檻）：自己 build Berth 的 image（只有 backend 那一層）、
 起一次性的 Jellyfin 與 qBittorrent、造 1,000 部 × 12 集的媒體樹（掃描約 6 分鐘），量完連容器、volume、network、image
 一起刪。宿主只要 Python 標準庫與 docker；量測本身在 Berth 的 image 裡跑。結果見

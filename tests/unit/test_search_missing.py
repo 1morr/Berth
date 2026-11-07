@@ -15,7 +15,12 @@ from collections.abc import Sequence
 
 from berth.domain import EpisodeStatus
 from berth.services.inventory import EpisodeView, SeasonView
-from berth.services.search_queries import MAX_QUERIES, QueryBatch, missing_batches
+from berth.services.search_queries import (
+    MAX_QUERIES,
+    QueryBatch,
+    has_one_aired_season,
+    missing_batches,
+)
 
 BEAR = ("The Bear", "熊家餐館")
 SPY = ("SPY x FAMILY", "SPY×FAMILY", "間諜家家酒")
@@ -36,10 +41,14 @@ def episode(number: int, status: EpisodeStatus, absolute: int | None = None) -> 
 
 
 def missing_queries(
-    names: Sequence[str], seasons: tuple[SeasonView, ...], *, season: int | None = None
+    names: Sequence[str],
+    seasons: tuple[SeasonView, ...],
+    *,
+    season: int | None = None,
+    one_season_work: bool = False,
 ) -> tuple[str, ...]:
     """放得下一批時的那幾個查詢。沒有缺集是空的。"""
-    batches = missing_batches(names, seasons, season=season)
+    batches = missing_batches(names, seasons, season=season, one_season_work=one_season_work)
     if not batches:
         return ()
     (only,) = batches
@@ -109,6 +118,85 @@ def test_a_season_that_is_missing_every_aired_episode_asks_for_the_season() -> N
     assert missing_queries(BEAR, seasons) == ("The Bear S02", "The Bear Season 2", "熊家餐館 第2季")
 
 
+def test_a_single_season_work_that_misses_the_whole_season_asks_by_name_alone() -> None:
+    """只有一季的作品，發佈名不寫季記號：整季缺時問名字本身（M5.6 票 02、brief §20.28）。
+
+    失效條件（2026-11-07 實測）：只有一季的番，字幕組的發佈名不寫「第1季」／`S01`／`Season 1`，
+    所以「名字 第1季」在 Mikan、dmhy、Nyaa、acg.rip 零筆，只剩 The Pirate Bay 的一整頁無關結果。
+    CJK 名字與拉丁字名字同一個問題。季記號仍歸到那一季（畫面說得出問了哪一季），只是不接在名字後面。
+    """
+    seasons = (season(1, episode(1, EpisodeStatus.MISSING), episode(2, EpisodeStatus.MISSING)),)
+
+    assert missing_queries(("私を喰べたい、ひとでなし",), seasons, one_season_work=True) == (
+        "私を喰べたい、ひとでなし",
+    )
+    assert missing_queries(("Death Note",), seasons, one_season_work=True) == ("Death Note",)
+    (batch,) = missing_batches(BEAR, seasons, one_season_work=True)
+    assert batch.seasons == (1,)
+
+
+def test_a_single_season_work_that_misses_only_some_episodes_asks_for_those_episodes() -> None:
+    """逐集的記號不受影響：缺幾集時發佈名本身就寫得出集號，`S01E01` 問得到。"""
+    seasons = (season(1, episode(1, EpisodeStatus.MISSING), episode(2, EpisodeStatus.IMPORTED)),)
+
+    assert missing_queries(("Death Note",), seasons, one_season_work=True) == ("Death Note S01E01",)
+
+
+def test_specials_of_a_single_season_work_keep_their_mark() -> None:
+    """特別篇（`S00`）不是「那一季」：作品只有一季時，S00 整季缺照樣問 `S00`，不換成名字本身。"""
+    seasons = (
+        season(0, episode(1, EpisodeStatus.MISSING)),
+        season(1, episode(1, EpisodeStatus.IMPORTED)),
+    )
+
+    assert missing_queries(("Death Note",), seasons, one_season_work=True) == (
+        "Death Note S00",
+        "Death Note Season 0",
+    )
+
+
+def test_only_the_regular_seasons_that_have_aired_count() -> None:
+    """「只有一季」看播過的季（M5.6 票 02）：特別篇不算，公告了卻一集都還沒播的下一季也不算
+    ——TMDB 常常早早就建好那一列，而那部作品目前的發佈仍然不寫季記號。"""
+    assert has_one_aired_season((season(1, episode(1, EpisodeStatus.MISSING)),))
+    assert has_one_aired_season(
+        (
+            season(0, episode(1, EpisodeStatus.IMPORTED)),
+            season(1, episode(1, EpisodeStatus.MISSING)),
+        )
+    )
+    assert has_one_aired_season(
+        (
+            season(1, episode(1, EpisodeStatus.MISSING)),
+            season(2, episode(1, EpisodeStatus.UNAIRED)),
+        )
+    )
+    assert not has_one_aired_season(
+        (
+            season(1, episode(1, EpisodeStatus.MISSING)),
+            season(2, episode(1, EpisodeStatus.IMPORTED)),
+        )
+    )
+
+
+def test_a_multi_season_work_still_asks_for_the_season_by_its_mark() -> None:
+    """多季作品不變：第 2 季的發佈寫得出季記號，整季缺照舊問季記號（M4 票 84）。
+
+    首批之後的分批只看得到後面的季，但「這部作品有幾季」是作品的性質——呼叫端說了算，
+    不能因為這一批只剩一季就當成只有一季的作品。
+    """
+    seasons = (
+        season(1, episode(1, EpisodeStatus.IMPORTED)),
+        season(2, episode(1, EpisodeStatus.MISSING), episode(2, EpisodeStatus.MISSING)),
+    )
+
+    assert missing_queries(BEAR, seasons, one_season_work=False) == (
+        "The Bear S02",
+        "The Bear Season 2",
+        "熊家餐館 第2季",
+    )
+
+
 def test_an_episode_with_an_absolute_number_is_asked_for_by_that_number() -> None:
     """TMDB 給了絕對編號的作品，發佈就是照絕對編號編的——`S02E01` 在那些站上一筆都搜不到。
 
@@ -161,7 +249,7 @@ def test_gaps_in_more_seasons_than_one_batch_are_asked_in_batches() -> None:
         for number in range(1, 8)
     )
 
-    batches = missing_batches(LONG, seasons)
+    batches = missing_batches(LONG, seasons, one_season_work=False)
 
     assert [batch.seasons for batch in batches] == [(1, 2, 3), (4, 5, 6), (7,)]
     assert batches[0] == QueryBatch(
@@ -188,7 +276,7 @@ def test_one_batch_names_the_seasons_it_asks_for() -> None:
         season(3, episode(1, EpisodeStatus.MISSING), episode(2, EpisodeStatus.MISSING)),
     )
 
-    (batch,) = missing_batches(BEAR, seasons)
+    (batch,) = missing_batches(BEAR, seasons, one_season_work=False)
 
     assert batch.seasons == (1, 3)
 
@@ -210,15 +298,15 @@ def test_nothing_missing_asks_nothing() -> None:
     """
     seasons = (season(1, episode(1, EpisodeStatus.IMPORTED), episode(2, EpisodeStatus.UNAIRED)),)
 
-    assert missing_batches(BEAR, seasons) == ()
-    assert missing_batches(BEAR, ()) == ()
+    assert missing_batches(BEAR, seasons, one_season_work=False) == ()
+    assert missing_batches(BEAR, (), one_season_work=False) == ()
 
 
 def test_no_name_asks_nothing() -> None:
     """一個名字都沒開：畫面在按下去之前就停用了搜尋鍵，這裡守的是手改網址那一條路。"""
     seasons = (season(1, episode(1, EpisodeStatus.MISSING)),)
 
-    assert missing_batches((), seasons) == ()
+    assert missing_batches((), seasons, one_season_work=False) == ()
 
 
 def test_an_ampersand_name_asks_both_spellings() -> None:

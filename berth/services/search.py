@@ -72,6 +72,7 @@ from berth.services.search_queries import (
     SearchName,
     chosen_names,
     default_choice,
+    has_one_aired_season,
     missing_batches,
     search_names,
     season_numbers,
@@ -365,8 +366,12 @@ async def _missing(
     """
     # 快照由呼叫端讀過了（那一趟已經套過 24 小時的規則），所以這一趟只讀資料庫，不打 TMDB。
     view = await read_media(session, factory, media_id, access)
+    # 分批之後只看得到後面的季，而「只有一季的作品不接季記號」是作品的性質（M5.6 票 02），
+    # 所以看整份季表：特別篇與還沒播的下一季都不算（`has_one_aired_season`）。
     later = [row for row in view.seasons if row.season_number >= from_season]
-    return missing_batches(names, later, season=season)
+    return missing_batches(
+        names, later, season=season, one_season_work=has_one_aired_season(view.seasons)
+    )
 
 
 def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:

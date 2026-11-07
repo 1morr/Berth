@@ -81,6 +81,16 @@ def season_numbers(snapshot: MediaSnapshot) -> tuple[int, ...]:
     return tuple(sorted({row.season_number for row in snapshot.seasons if row.season_number > 0}))
 
 
+def has_one_aired_season(seasons: Iterable[SeasonView]) -> bool:
+    """這部作品只有一季播過（M5.6 票 02）：整季缺時不接季記號的判準。
+
+    特別篇（`S00`）不算一季；已經公告、但一集都還沒播的下一季也不算——TMDB 常常早早就建好
+    那一列，而目前的發佈仍然不寫季記號。呼叫端要看**整份**季表：分批之後的後幾批只看得到
+    後面的季，而這是作品的性質、不是這一批的性質。
+    """
+    return len([row for row in seasons if row.season_number > 0 and row.aired > 0]) == 1
+
+
 def default_choice(snapshot: MediaSnapshot, remembered: Mapping[NameKind, bool]) -> QueryChoice:
     """打開作品頁時開著哪些。
 
@@ -124,14 +134,19 @@ def title_queries(snapshot: MediaSnapshot, choice: QueryChoice) -> tuple[str, ..
 
 
 def missing_batches(
-    names: Sequence[str], seasons: Sequence[SeasonView], *, season: int | None = None
+    names: Sequence[str],
+    seasons: Sequence[SeasonView],
+    *,
+    season: int | None = None,
+    one_season_work: bool,
 ) -> tuple[QueryBatch, ...]:
     """季表上缺的那幾集要拿哪幾個名字去問，分成幾批（M1.5 票 10、M3 票 20、M4 票 84、plan §8.4）。
 
     季表已經知道缺哪幾集，所以搜尋不必再從作品名開始。查詢是**名字 × 記號**，記號由缺的形狀決定
     （使用者 2026-09-19 拍板）：
 
-    - **整季缺**（那一季播出了的每一集都缺）→ 季記號，與照作品名搜同一個 `season_tokens`。
+    - **整季缺**（那一季播出了的每一集都缺）→ 季記號，與照作品名搜同一個 `season_tokens`；
+      作品只有一季時不接記號（見下）。
     - **缺幾集 / 缺一集** → 一集一個記號：TMDB 給了絕對編號就用它（兩位數補零，照 Sonarr 的
       動漫查詢），否則 `S03E05`。有絕對編號的作品，發佈就是照絕對編號編的——`S02E01` 在那些
       站上一筆都搜不到；反過來也一樣，所以**一集只有一個記號**，兩種都送會讓記號數加倍。
@@ -142,6 +157,11 @@ def missing_batches(
     **開了的每一個名字都問到這一批的每一個記號**（M4 票 84）：票 84 之前一批是「第一個名字問完
     五個記號就滿了」，中文字幕組認得的名字常常輪不到。`season` 有值時只看那一季
     （展開區那一顆按鈕）。
+    **作品只有一季時，整季缺不接季記號**（M5.6 票 02）：只有一季的番，發佈名不寫「第1季」／
+    `S01`／`Season 1`，接上去的查詢在動畫站零筆（brief §20.28 實測）。修在這一層、不是
+    `season_tokens`：按搜尋那邊的季是使用者自己開的，要問哪一季由他決定。特別篇（`S00`）照舊接記號。
+    `one_season_work` 是**作品的性質**、不是這一批的性質：分批之後的後幾批只看得到後面那幾季，
+    所以由呼叫端（`services/search.py` 的 `has_one_aired_season`）看整份季表說。
     沒有缺集或沒開名字就回空的——不退回作品名，使用者按的是「搜缺的集」。
     """
     spellings = _spellings(names)
@@ -150,34 +170,59 @@ def missing_batches(
     if season is not None:
         seasons = [row for row in seasons if row.season_number == season]
     marks = [(row.season_number, mark) for row in seasons for mark in _gap_marks(row)]
-    if len(_queries(spellings, marks)) > MAX_QUERIES:
+    if len(_queries(spellings, marks, one_season_work=one_season_work)) > MAX_QUERIES:
         # 逐集放不下就整批收成季記號：問前幾集等於默默漏掉其餘那幾集，而使用者按的是
         # 「搜缺的集」。收窄到季之後那一季的發佈都回得來，逐集交給結果表的預估去分。
         marks = [(row.season_number, None) for row in seasons if _gaps(row)]
 
     chunks: list[list[tuple[int, str | None]]] = []
     for mark in marks:
-        if chunks and len(_queries(spellings, [*chunks[-1], mark])) <= MAX_QUERIES:
+        fits = (
+            bool(chunks)
+            and len(_queries(spellings, [*chunks[-1], mark], one_season_work=one_season_work))
+            <= MAX_QUERIES
+        )
+        if fits:
             chunks[-1].append(mark)
         else:
             chunks.append([mark])
     return tuple(
         QueryBatch(
-            queries=_queries(spellings, chunk),
+            queries=_queries(spellings, chunk, one_season_work=one_season_work),
             seasons=tuple(dict.fromkeys(number for number, _ in chunk)),
         )
         for chunk in chunks
     )
 
 
-def _queries(spellings: Sequence[str], marks: Sequence[tuple[int, str | None]]) -> tuple[str, ...]:
-    """一批的查詢，名字優先。記號是 `None` 的是整季，照名字的文字系統換成季記號。"""
+def _queries(
+    spellings: Sequence[str],
+    marks: Sequence[tuple[int, str | None]],
+    *,
+    one_season_work: bool = False,
+) -> tuple[str, ...]:
+    """一批的查詢，名字優先。記號是 `None` 的是整季，照名字的文字系統換成季記號。
+
+    作品只有一季、缺的又是正片那一季時，整季缺換成**不接記號的名字**——發佈名不寫季號，
+    接上去的查詢一筆都問不到（`missing_batches`）。特別篇（S00）不算那一季，照舊接記號。
+    """
     return _unique(
-        f"{spelled} {token}"
+        query
         for spelled in spellings
         for number, mark in marks
-        for token in ((mark,) if mark is not None else season_tokens(spelled, number))
+        for query in _mark_queries(spelled, number, mark, one_season_work=one_season_work)
     )
+
+
+def _mark_queries(
+    spelled: str, number: int, mark: str | None, *, one_season_work: bool
+) -> tuple[str, ...]:
+    """一個名字在這一季要問的那幾個查詢：逐集的是名字加記號；整季缺看是不是只有一季的作品。"""
+    if mark is not None:
+        return (f"{spelled} {mark}",)
+    if one_season_work and number > 0:
+        return (spelled,)
+    return tuple(f"{spelled} {token}" for token in season_tokens(spelled, number))
 
 
 def _gap_marks(season: SeasonView) -> tuple[str | None, ...]:
