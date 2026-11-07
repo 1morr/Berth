@@ -827,19 +827,28 @@ test('側面板的把手：桌機拖寬、鍵盤調、重新載入記得上次�
     return
   }
 
+  // 寬度依根字級算：改瀏覽器預設字級時產品照 rem 走，測試不該硬寫 px。
+  const rem = Number(
+    await page.evaluate('parseFloat(getComputedStyle(document.documentElement).fontSize)'),
+  )
   const before = (await panel.boundingBox())?.width ?? 0
-  expect(before).toBeCloseTo(416, 0)
+  expect(before).toBeCloseTo(26 * rem, 0)
 
-  // 拖左緣的把手往左 120px：面板變寬，主內容讓位、整頁沒有橫向捲動。
-  const grip = await handle.boundingBox()
-  expect(grip).not.toBeNull()
-  const x = (grip?.x ?? 0) + (grip?.width ?? 0) / 2
-  const y = (grip?.y ?? 0) + 200
+  /** 抓住面板左緣的把手，水平拖 `dx` 像素。 */
+  async function dragPanel(dx: number) {
+    const grip = await handle.boundingBox()
+    expect(grip).not.toBeNull()
+    const x = (grip?.x ?? 0) + (grip?.width ?? 0) / 2
+    const y = (grip?.y ?? 0) + 200
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + dx, y, { steps: 8 })
+    await page.mouse.up()
+  }
+
+  // 往左拖 120px：面板變寬，主內容讓位、整頁沒有橫向捲動。
   const scrolled = await page.evaluate('window.scrollY')
-  await page.mouse.move(x, y)
-  await page.mouse.down()
-  await page.mouse.move(x - 120, y, { steps: 8 })
-  await page.mouse.up()
+  await dragPanel(-120)
   const dragged = (await panel.boundingBox())?.width ?? 0
   expect(dragged - before).toBeGreaterThan(100)
   // 拖動不搶焦點、不捲頁。
@@ -848,17 +857,18 @@ test('側面板的把手：桌機拖寬、鍵盤調、重新載入記得上次�
   await expectNoHorizontalScroll(page)
   await shot(page, 'panel-resize-dragged')
 
-  // 重新載入：同一個寬度（記在瀏覽器，不在伺服器）。
+  // 重新載入：同一個寬度（記在瀏覽器，不在伺服器）。靜止的把手有三道握把刻記（critique）。
   await page.reload()
   const reloaded = (await panel.boundingBox())?.width ?? 0
   expect(Math.abs(reloaded - dragged)).toBeLessThan(1)
+  await shot(page, 'panel-resize-rest')
 
   // 鍵盤：把手聚焦，`Shift` + 左方向鍵一次 4rem；拖動過的把手也在 Tab 順序裡。
   await handle.focus()
   await expect(handle).toBeFocused()
   await page.keyboard.press('Shift+ArrowLeft')
   const widened = (await panel.boundingBox())?.width ?? 0
-  expect(widened - reloaded).toBeCloseTo(64, 0)
+  expect(widened - reloaded).toBeCloseTo(4 * rem, 0)
   // 鍵盤操作時焦點環看得見（全站那一圈雙環）。
   expect(
     await page.evaluate(
@@ -866,7 +876,27 @@ test('側面板的把手：桌機拖寬、鍵盤調、重新載入記得上次�
     ),
   ).toBe(true)
   await expectNoHorizontalScroll(page)
+  // 聚焦時抬頭列有寬度讀數（critique P1）。
+  await expect(panel.getByText(`${Math.round(widened / rem)} rem`)).toBeVisible()
   await shot(page, 'panel-resize-keyboard')
+
+  // 雙擊把手回預設 26rem（critique P1），讀數跟著回去。
+  await handle.dblclick()
+  expect((await panel.boundingBox())?.width ?? 0).toBeCloseTo(26 * rem, 0)
+  await expect(handle).toHaveAttribute('aria-valuenow', '26')
+
+  // 最窄：夾在 24rem，主內容照舊不橫向捲動。
+  await dragPanel(400)
+  expect((await panel.boundingBox())?.width ?? 0).toBeCloseTo(24 * rem, 0)
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'panel-resize-narrowest')
+
+  // 最寬：夾在 40rem；`lg` 的 1024 窗寬下頁面與面板也放得下。
+  await dragPanel(-800)
+  expect((await panel.boundingBox())?.width ?? 0).toBeCloseTo(40 * rem, 0)
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'panel-resize-widest')
 })
 
 async function expectNoHorizontalScroll(page: import('@playwright/test').Page) {

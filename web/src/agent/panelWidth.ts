@@ -2,11 +2,13 @@
  * 側面板的寬度（M5.6 票 10b）：桌面拖面板左緣的把手、或把把手聚焦後按左右方向鍵。單位是 rem，
  * 與版面節奏同一把尺（DESIGN.md〈節奏〉）。
  *
- * 上下限照 DESIGN.md〈側面板〉的版面：`26rem` 是原本的一欄，`20rem` 是 390 的手機寬度（面板全寬
- * 時確認卡放得下的寬），`40rem` 是 1280 開著面板時頁面還剩得下兩欄。夾在範圍裡，不是自由數字。
+ * 上下限照 DESIGN.md〈側面板〉的版面：`26rem` 是原本的一欄；`24rem`（384px）挨著 390 的手機寬
+ * （24.4rem）——票 10 量到那裡 Route 下拉 330px 加左右各 1rem 內距是 362px，再窄就換這張卡擠；
+ * `40rem` 是 1280 開著面板時頁面還剩得下兩欄（e2e 也在 `lg` 的 1024 量過沒有橫向捲動）。
+ * 夾在範圍裡，不是自由數字。
  */
 export const PANEL_WIDTH_DEFAULT = 26
-export const PANEL_WIDTH_MIN = 20
+export const PANEL_WIDTH_MIN = 24
 export const PANEL_WIDTH_MAX = 40
 /** 左右方向鍵一次一步；`Shift` 一起按是加大步進。 */
 export const PANEL_WIDTH_STEP = 1

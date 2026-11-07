@@ -54,7 +54,7 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | 2026-11-07 | M5.6 08 以作品訂閱 | `rss.subscribe`：純函式挑番組（名字相等＋開播日）、`match_bangumi` 搜四個名字、卡片照舊；舊工具留給票 09，bench 0 錯 | 新 session 下 `/implement .scratch/m5.6/issues/09-subscribe-keyword-fallback.md` |
 | 2026-11-07 | M5.6 09 退回關鍵字 | 找不到番組或字幕組時 `rss.subscribe` 自己問 nyaa／acg.rip，卡片列來源（新拒絕 `subgroups_not_found`）；工具 22→18，舊訂閱卡預覽刪掉 | 新 session 下 `/implement .scratch/m5.6/issues/10-m5.6-ui-wrap-up.md` |
 | 2026-11-07 | M5.6 10 UI 收尾 | 替身加 13 列與兩部作品兩種卡；critique 25/40、audit 17/20、polish：摘要一行、長卡確認貼底、批次勾選改中性、文案與 aria 修正 | 新 session 下 `/implement .scratch/m5.6/issues/10b-assistant-panel-resize.md` |
-| 2026-11-07 | M5.6 10b 面板拖寬 | 桌機左緣把手拖寬（20–40rem 夾住）、方向鍵 1／4rem、寬度記 localStorage；窄版不畫；vitest 2458、pytest 5804、e2e 102 綠 | 新 session 下 `/implement .scratch/m5.6/issues/11-m5.6-acceptance.md` |
+| 2026-11-07 | M5.6 10b 面板拖寬 | 桌機把手拖寬（24–40rem、命中區 24px）、握把刻記、寬度讀數、雙擊重設、記 localStorage；窄版不畫；critique 28/40、audit 18/20 | 新 session 下 `/implement .scratch/m5.6/issues/11-m5.6-acceptance.md` |
 
 ## 偏差與決定
 

@@ -29,6 +29,7 @@ import {
   usePanel,
 } from './panelState'
 import {
+  PANEL_WIDTH_DEFAULT,
   PANEL_WIDTH_LARGE_STEP,
   PANEL_WIDTH_MAX,
   PANEL_WIDTH_MIN,
@@ -97,6 +98,8 @@ export function AgentPanel({ narrow }: { narrow: boolean }) {
   // 「對話」那一塊（M5.5 票 18）：disclosure，同帳號選單。
   const [listing, setListing] = useState(false)
   const [width, setWidth] = useState(readPanelWidth)
+  // 拖動或聚焦時抬頭列多一格寬度讀數（M5.6 票 10b 的 critique）：拖到上下限時看得出來是到底了。
+  const [adjusting, setAdjusting] = useState(false)
   // 拖到一半放手、下一次拖動的起點：pointerup 當下的 state 可能還是上一格，用 ref 讀最新的。
   const latestWidth = useRef(width)
   const drag = useRef<{ x: number; width: number; rem: number } | null>(null)
@@ -141,16 +144,30 @@ export function AgentPanel({ narrow }: { narrow: boolean }) {
   function dragTo(event: PointerEvent<HTMLDivElement>) {
     const start = drag.current
     if (start === null) return
+    if (event.buttons === 0) {
+      // 沒收到 pointerup（在視窗外放手、capture 被搶走）：收掉這次拖動、把它記下來，
+      // 之後的 hover 不要接著改寬度。
+      drag.current = null
+      writePanelWidth(latestWidth.current)
+      return
+    }
     setPanelWidth(clampPanelWidth(start.width + (start.x - event.clientX) / start.rem))
   }
 
   function endDrag(event: PointerEvent<HTMLDivElement>) {
     if (drag.current === null) return
     drag.current = null
+    setAdjusting(false)
     const handle = event.currentTarget
     if (handle.hasPointerCapture?.(event.pointerId)) handle.releasePointerCapture(event.pointerId)
     // 放手才寫：拖動途中每一格都寫 `localStorage` 是同步 I/O，會讓拖動掉格。
     writePanelWidth(latestWidth.current)
+  }
+
+  /** 雙擊回預設：拖歪了不必一格一格按回來（critique P1）。 */
+  function resetWidth() {
+    setPanelWidth(PANEL_WIDTH_DEFAULT)
+    writePanelWidth(PANEL_WIDTH_DEFAULT)
   }
 
   return (
@@ -161,31 +178,60 @@ export function AgentPanel({ narrow }: { narrow: boolean }) {
       aria-modal={narrow ? true : undefined}
       onKeyDown={onKeyDown}
       style={narrow ? undefined : { width: `${width}rem` }}
-      className="fixed inset-0 z-10 flex min-w-0 flex-col bg-hull lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:w-[26rem] lg:shrink-0 lg:border-l-2 lg:border-rule-strong"
+      className="fixed inset-0 z-10 flex min-w-0 flex-col bg-hull lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:shrink-0 lg:border-l-2 lg:border-rule-strong"
     >
       {/* 拖寬的把手（M5.6 票 10b）：蓋在面板左緣的分隔線上，桌機才有——窄版面板蓋滿視窗，拖了也沒有意義。
-          `preventDefault` 讓拖動不搶焦點、不在頁面上選字；`touch-none` 讓觸控拖動不變成捲頁。 */}
+          命中區 `w-6`（24px，DESIGN.md〈命中面積〉）；畫出來的是置中的 2px 線，平常透明（露出分隔線），
+          hover 與聚焦時換成 `ink`。`preventDefault` 讓拖動不搶焦點、不在頁面上選字；`touch-none` 讓觸控拖動不變成捲頁。 */}
       {narrow ? null : (
         <div
           role="separator"
           aria-orientation="vertical"
           aria-label={t('agent.resize')}
           aria-valuenow={Math.round(width)}
+          aria-valuetext={t('agent.resizeValue', { width: Math.round(width) })}
           aria-valuemin={PANEL_WIDTH_MIN}
           aria-valuemax={PANEL_WIDTH_MAX}
           tabIndex={0}
           onKeyDown={resizeWithKeys}
-          onPointerDown={startDrag}
+          onPointerDown={(event) => {
+            setAdjusting(true)
+            startDrag(event)
+          }}
           onPointerMove={dragTo}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          className="absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none hover:bg-rule-strong"
-        />
+          onDoubleClick={resetWidth}
+          onFocus={() => setAdjusting(true)}
+          onBlur={() => setAdjusting(false)}
+          className="group absolute inset-y-0 left-0 z-10 w-6 -translate-x-1/2 cursor-col-resize touch-none"
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-transparent group-hover:bg-ink group-focus-visible:bg-ink"
+          />
+          {/* 靜止時的握把刻記（critique P1）：三條短橫線，hover／聚焦轉 `ink`。 */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-1"
+          >
+            {[0, 1, 2].map((tick) => (
+              <span
+                key={tick}
+                className="block h-0.5 w-3 bg-ink-dim group-hover:bg-ink group-focus-visible:bg-ink"
+              />
+            ))}
+          </span>
+        </div>
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-rule bg-deck px-4 py-2.5">
         <h2 id={PANEL_TITLE_ID} tabIndex={-1} className="label mr-auto bg-deck text-ink">
           {t('agent.title')}
         </h2>
+        {adjusting ? (
+          // 寬度讀數（critique P1）：拖動或聚焦時才出現，滑鼠離開就收掉。
+          <span className="value text-xs text-ink-dim">{Math.round(width)} rem</span>
+        ) : null}
         {enabled ? (
           <>
             <GhostButton
