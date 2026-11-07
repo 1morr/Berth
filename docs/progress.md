@@ -43,7 +43,7 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | 2026-11-06 | M5.6 方案 | 試用機對話分析與精簡方案 `docs/research/agent-slimming-2026-11-06.md`：Route 卡一部作品問一次、skills 5→3、工具 22→18、C2 季記號 bug | 等使用者：審精簡方案，決定 M5.6 排在 M6 之前或之後 |
 | 2026-11-06 | M5.6 開工 | 方案已審、排在 M6 前；spec 與 11 張票：基準先量、C3 拆兩張、UI 收尾獨立；plan 補 §11.6c、brief §17 加 M5.6 列 | 新 session 下 `/implement .scratch/m5.6/issues/01-baseline.md` |
 | 2026-11-07 | M5.6 工具 | 加 `.worktreeinclude`：Orca 與 Claude Code 新建的 worktree 從主資料夾複製 `.claude/settings.local.json`（本機 router 設定） | 新 session 下 `/implement .scratch/m5.6/issues/01-baseline.md` |
-| 2026-11-07 | M5.6 01 基準 | S7/S8 進腳本、summary 加種子搜尋與 skill 載入；真模型 22 列約 $0.35：S7 種子 11/10、Route 13，S8 0/6 | 新 session 下 `/implement .scratch/m5.6/issues/02-single-season-search-marks.md` |
+| 2026-11-07 | M5.6 01 基準 | S7/S8 進腳本、summary 加種子搜尋與 skill 載入；真模型 22 列約 $0.39：S7 種子 11/22、Route 13，S8 0/6 | 新 session 下 `/implement .scratch/m5.6/issues/02-single-season-search-marks.md` |
 
 ## 偏差與決定
 

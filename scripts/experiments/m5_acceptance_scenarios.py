@@ -3,7 +3,8 @@
 # ruff: noqa: E501
 """M5 驗收（票 23）與 M5.6 基準（票 01）：對產品的 `/agent/chat` 與 Proposal API，用真模型逐一跑側面板情境。
 
-M5.6 起 summary 多記種子搜尋次數（`S8` 量「還沒說要下載就搜」）、skill 載入次數與要人選 Route 的列數。
+M5.6 起 summary 另記種子搜尋次數（`S8` 量「還沒說要下載就搜」）與 skill 載入次數；要人選 Route 的列數
+M5 票 23b 起就有。
 情境 `S7` 是「非人少女」那段對話（原 conversation `b0e4f028`），`S8` 是它的模糊開頭；舊的 Route 情境
 改名 `S7-route`（M5 票 23b 的那一個，命名沿用 `S2-mushoku` 的變體慣例）。
 
@@ -142,7 +143,7 @@ SCENARIOS = [
         "S7",
         "非人少女：要下載 → 指定喵萌奶茶屋繁中單集 → 出卡（原對話 `b0e4f028`）",
         [
-            "我想下載《想吃掉我的非人少女》（私を喰べたい、ひとでなし），先找來源給我看。",
+            "我想下載《想吃掉我的非人少女》，先找來源給我看。",
             "字幕組用喵萌奶茶屋的繁中單集，直接出卡給我確認。",
         ],
         "種子搜尋次數（原對話 18 次，S7 的目標 ≤ 6）；13 列同一部作品的送單卡 Route 只要選 1 次（票 03）；"
@@ -278,10 +279,10 @@ class Runner:
                     log.append(f"> 🟥 確認卡 `{ask['toolCallId']}` 在 proposals 裡找不到\n")
                     continue
                 body: dict[str, Any] = {"approve": True, "selection": None}
-                wanted: list[dict[str, Any] | None] = card["preview"].get("routes") or []
-                if any(wanted):
-                    body["routes"] = [pick_route(ask) for ask in wanted]
-                    log.append(routes_md(wanted, body["routes"]))
+                wanted_routes: list[dict[str, Any] | None] = card["preview"].get("routes") or []
+                if any(wanted_routes):
+                    body["routes"] = [pick_route(ask) for ask in wanted_routes]
+                    log.append(routes_md(wanted_routes, body["routes"]))
                 wanted_subgroups: list[dict[str, Any] | None] = (
                     card["preview"].get("subgroups") or []
                 )

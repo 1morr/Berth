@@ -223,11 +223,14 @@ tools: [discover.search_media, media.read_media, why_not.explain,
 ## 5. 驗收與量測
 
 - **基準**：改之前先跑一次 `scripts/experiments/m5_acceptance_scenarios.py`（S1–S6 加 S2 三個變體，
-  兩種接口；上次約 $0.20），再加一個 S7：這段對話（找「非人少女」、選喵萌奶茶屋繁中單集）。
+  兩種接口），再加兩個情境：S7 是這段對話（要下載「非人少女」、選喵萌奶茶屋繁中單集、直接出卡），
+  S8 是它的模糊開頭（只說「找」、兩句都沒說要下載，量「還沒說要下載就搜種子」）。
+  實測數字見下面〈基準〉。
 - **改完重跑同一組**，比工具呼叫數、input token、費用。品質照 M5 驗收的逐項檢查，S2 三個變體的
   範圍標記不能變差。
 - **目標**：
-  - S7 的種子搜尋從 18 次降到 ≤ 6 次；
+  - S7 的種子搜尋 ≤ 6 次，和〈基準〉量到的 10–11 次比（原對話的 18 次含 S7 沒有的模糊開頭，不拿來比）；
+  - S8 沒有種子搜尋（基準的 openai 是 6 次）；
   - 卡片 Route 點擊從 13 次降到 1 次；
   - skills 總行數 ≤ 80。
 
@@ -253,7 +256,7 @@ tools: [discover.search_media, media.read_media, why_not.explain,
 
 票：[`.scratch/m5.6/issues/01-baseline.md`](../../.scratch/m5.6/issues/01-baseline.md)。在任何會影響模型行為的改動之前量一次，之後每一項都和這裡比。
 驅動：`scripts/experiments/m5_acceptance_scenarios.py`；演練情境：`scripts/fake_setup_server.py --scenario agent-live`。
-逐字稿：[`m5-acceptance/baseline-core/`](m5-acceptance/baseline-core/)、[`baseline-s7s8/`](m5-acceptance/baseline-s7s8/)、[`baseline-retry-s1/`](m5-acceptance/baseline-retry-s1/)、[`baseline-retry-s2a/`](m5-acceptance/baseline-retry-s2a/)、[`baseline-retry-s7route/`](m5-acceptance/baseline-retry-s7route/)（`.local/` 不進版控）。
+逐字稿在 `.local/experiments/results/m5_acceptance/`（不進版控）的 `baseline-core/`、`baseline-s7s8/`、`baseline-retry-s1/`、`baseline-retry-s2a/`、`baseline-retry-s7route/`、`baseline-retry-s7/`。
 
 ### 環境
 
@@ -264,8 +267,8 @@ tools: [discover.search_media, media.read_media, why_not.explain,
 - **時間**：2026-11-07 UTC 02:12–02:55（DeepSeek 尖峰）。
 - **情境**：S1–S6、S2 的三個變體、`S7-route`（M5 票 23b 的舊情境，這次改名），加上新的 S7（非人少女）與 S8（同一段對話的模糊開頭）。S8 排在 S7 前面：S7 會下載同一部作品，先跑 S8 才量得準「還沒說要下載就搜」。
 - **驅動這次的改動**：舊的 Route 情境從 `S7` 改名 `S7-route`（新的 S7／S8 用掉這兩個編號）；summary 加種子搜尋次數、skill 載入次數（Route 列數原本就有）；確認卡的字幕組照模型預選的那一個送（M5 票 26 之後商品會要人選，舊驅動沒送，S1 的卡會停在 `pending`）。
-- **重跑**：第一輪 S1（驅動沒送字幕組）與 S2 anthropic（模型端 `max_tokens` 4096 的暫時錯誤）無效，修好驅動後各重跑；S4 anthropic 跟著 S2 重跑。`S7-route` 在第一輪被前一個 S3 的下載污染（S3 已把宝石の国整季送進 qBittorrent，模型正確地不再重複下載），另外用全新的 server 重跑。表格只放有效的那些列。
-- **費用**：表中 22 列合計 **$0.256**（anthropic $0.133、openai $0.122）；被丟掉的那幾輪（S1、S2 anthropic、S4 anthropic、S7-route）約 **$0.091**，這次總共花約 **$0.35**。
+- **重跑**：第一輪 S1（驅動沒送字幕組）與 S2 anthropic（模型端 `max_tokens` 4096 的暫時錯誤）無效，修好驅動後各重跑；S4 anthropic 跟著 S2 重跑。`S7-route` 在第一輪被前一個 S3 的下載污染（S3 已把宝石の国整季送進 qBittorrent，模型正確地不再重複下載），另外用全新的 server 重跑。S7 的固定句第一版多寫了原對話沒有的日文原名，拿掉後重跑。表格只放有效的那些列。
+- **費用**：表中 22 列合計 **$0.263**（anthropic $0.133、openai $0.130）；被丟掉的那幾輪（S1、S2 anthropic、S4 anthropic、S7-route、第一次的 S7）約 **$0.125**，這次總共花約 **$0.39**。
 
 ### 數字
 
@@ -289,13 +292,13 @@ tools: [discover.search_media, media.read_media, why_not.explain,
 | openai | S6 | 46 | 1 | 4 | 8 | 38,113 | 78% | 5,830 | 0 | 2 | 1 | 0 | — | 0.0097 |
 | anthropic | S7-route | 40 | 2 | 7 | 11 | 74,215 | 89% | 3,148 | 0 | 3 | 1 | 1 | downloading.add_manual_download executed 1 | 0.00662 |
 | openai | S7-route | 60 | 2 | 7 | 15 | 92,207 | 83% | 3,914 | 0 | 8 | 1 | 1 | downloading.add_manual_download executed 1 | 0.00985 |
-| anthropic | S7 | 100 | 3 | 10 | 18 | 189,633 | 86% | 7,747 | 0 | 11 | 1 | 13 | downloading.add_manual_download executed 13 | 0.01828 |
-| openai | S7 | 67 | 3 | 9 | 16 | 167,581 | 85% | 6,389 | 0 | 10 | 1 | 13 | downloading.add_manual_download executed 13 | 0.01594 |
+| anthropic | S7 | 106 | 3 | 12 | 19 | 225,304 | 88% | 7,207 | 0 | 11 | 1 | 13 | downloading.add_manual_download executed 13 | 0.01791 |
+| openai | S7 | 134 | 3 | 11 | 29 | 278,403 | 84% | 7,948 | 0 | 22 | 1 | 13 | downloading.add_manual_download executed 13 | 0.02404 |
 | anthropic | S8 | 27 | 2 | 6 | 8 | 44,600 | 92% | 2,368 | 0 | 0 | 0 | 0 | — | 0.00422 |
 | openai | S8 | 56 | 2 | 8 | 15 | 91,498 | 84% | 5,216 | 0 | 6 | 1 | 0 | — | 0.01113 |
 
-- 合計：anthropic 128 次工具、input 1.30M、$0.133；openai 127 次工具、input 1.19M、$0.122。
-- 種子搜尋（兩個接口合計）：S7 **21 次**（11 + 10）、S8 **6 次**（0 + 6）、S3 10 次、S2 13 次、`S7-route` 11 次。S8 的 6 次全是 openai 在兩句都沒說要下載時搜的。
+- 合計：anthropic 129 次工具、input 1.34M、$0.133；openai 140 次工具、input 1.31M、$0.130。
+- 種子搜尋（兩個接口合計）：S7 **33 次**（11 + 22）、S8 **6 次**（0 + 6）、S3 10 次、S2 13 次、`S7-route` 11 次。S8 的 6 次全是 openai 在兩句都沒說要下載時搜的。
 - 送單卡 Route 列數：S7 **13**（兩個接口都逐列問），`S7-route` 1，S1 1，S3 1。
 - 所有 run 的停止原因都是 `completed` 或 `awaiting_confirmation`；表中列出的 run `errors` 全空。
 
@@ -318,6 +321,15 @@ tools: [discover.search_media, media.read_media, why_not.explain,
 
 - **無職轉生**：兩個接口都把第 2 季**前半與後半兩列**標「未經核對，請確認」，並說明第 0 集在 Specials S00E02、官方 25 集對 TMDB 24 集；第 1、3 季沒有誤標。**比 M5 基準好**（M5 兩個接口都只標後半）。
 - **HUNTER×HUNTER 2011**：兩個接口都選對 `tv:46298`（不是 1999 年版），兩部劇場版列成獨立電影；S02 從 E63 起、貪婪之島跨 S01/S02 都講了。anthropic 三季都標；openai 用篇章列（6 列）並全部標「未經核對，請確認」。**兩邊都沒有漏標**（M5 的 openai 漏了 S1）。
+
+之後比對用下面這兩個數字，不看 summary 的「出現標記字樣」欄：
+
+| 變體 | 接口 | 列出粒度 | 該標的段 | 已標 | 漏標 |
+|---|---|---|---|---|---|
+| 無職轉生 | anthropic | 5 段（S1 前後、S2 前後、S3） | 第 2 季 2 段 | 2 | 0 |
+| 無職轉生 | openai | 6 列（多一列 Specials） | 第 2 季 2 段 | 2 | 0 |
+| HUNTER×HUNTER 2011 | anthropic | 3 季 | 3 季 | 3 | 0 |
+| HUNTER×HUNTER 2011 | openai | 6 篇章列 | 6 列 | 6 | 0 |
 
 **S3 冷門作品（宝石の国）**
 
@@ -344,8 +356,8 @@ tools: [discover.search_media, media.read_media, why_not.explain,
 **S7 非人少女（新）**
 
 - 兩個接口都對到 `tv:274810`、13 集全缺。第一句「先找來源給我看」之後都先問字幕組（沒有出卡）；第二句指定喵萌奶茶屋繁中單集後，各出一張 **13 列**的送單卡，全部 `done`。
-- **種子搜尋 11（anthropic）／10（openai）次**，**Route 要選 13 次**——這就是要修的問題（票 03、05、07 的目標分別是 Route 1 次、種子 ≤ 6 次）。
-- 原對話的 18 次包含「還沒說要下載就搜」的那一次，S7 從「我要下載」開始，所以**之後和 S7 的 10–11 次比，不用 18 次比**。
+- **種子搜尋 11（anthropic）／22（openai）次**，**Route 要選 13 次**——這就是要修的問題（票 03、05、07 的目標分別是 Route 1 次、種子 ≤ 6 次）。
+- 第一版 S7 的句子多給了原對話沒有的日文原名（`私を喰べたい、ひとでなし`），openai 只搜 10 次；拿掉之後重跑是 11／22 次，表格用重跑的。原對話的 18 次包含「還沒說要下載就搜」的那一次，S7 從「我要下載」開始，所以**之後和 S7 的 11／22 次比，不用 18 次比**。
 
 **S8 模糊開頭（新）**
 
@@ -354,6 +366,6 @@ tools: [discover.search_media, media.read_media, why_not.explain,
 
 ### 這次量測的限制
 
-- 驅動只在每個情境送固定的句子，**不回答模型臨場的問題**；S1、S3、S7 的「要哪個字幕組」所以靠第三句固定回答，S6 停在問題上。品質結論要看逐字稿，不看 summary 的「出現標記字樣」欄。
+- 驅動只在每個情境送固定的句子，**不回答模型臨場的問題**：S1 靠第三句（`ANSWER`）回答路線與字幕組，S3 靠第二句 `ANSWER`，S7 的第二句直接指定喵萌奶茶屋；S6 沒有後續句子，停在「要哪個字幕組」沒出卡。品質結論要看逐字稿，不看 summary 的「出現標記字樣」欄。
 - S7 的種子搜尋次數受索引站當下結果影響；之後重跑時要同一時間窗、同一個索引站，數字才直接可比。
 - 舊的 `S7-route` 和 S3 都用《宝石の国》：同一個 server 先跑 S3 會讓 `S7-route` 看到已經在下載。要一起跑時把 `S7-route` 放前面，或另外開一台。
