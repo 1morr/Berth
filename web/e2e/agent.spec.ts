@@ -142,6 +142,77 @@ async function expectPageFits(page: import('@playwright/test').Page) {
   expect(pageWidth).toBeLessThanOrEqual(viewport)
 }
 
+test('整季的卡 13 列同一部作品只選一次 Route；兩部作品可以全部套用（M5.6 票 03、10）', async ({
+  page,
+}) => {
+  await signIn(page, '/jobs')
+  await openBlank(page)
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+
+  // 「整季」：13 列同一部作品（數量閘的上限）。一部作品只有一個 Route 選擇，13 列共用。
+  await input.fill('下載整季 SPY×FAMILY')
+  await input.press('Enter')
+  const season = panel.getByRole('region', { name: '送出下載' })
+  await expect(season.getByRole('checkbox')).toHaveCount(13)
+  // 規模一行：幾項、共多少、勾了幾列、Route 選了沒（M5.6 票 10 的 critique）。
+  await expect(season).toContainText('13 項')
+  await expect(season).toContainText('已勾 13/13')
+  await expect(season).toContainText('Route：還沒選')
+  const route = season.getByRole('combobox', { name: 'Route' })
+  await expect(route).toHaveCount(1)
+  // 只有一部作品，沒有「全部套用」。
+  await expect(season.getByRole('combobox', { name: '全部套用' })).toHaveCount(0)
+  // 沒選之前不畫確認鍵，那一格說還有一部作品沒選。
+  await expect(season.getByRole('button', { name: /^確認/ })).toHaveCount(0)
+  await expect(season).toContainText('還有 1 部作品沒選 Route。')
+  await expectNoHorizontalScroll(page)
+  await season.getByRole('heading', { name: '送出下載' }).scrollIntoViewIfNeeded()
+  await shot(page, 'card-13-unpicked')
+
+  // 鍵盤操作：下拉在 Tab 順序裡（原生 select），打字選項（type-ahead），選了才畫確認鍵。
+  await expect(route).toHaveJSProperty('tabIndex', 0)
+  await route.focus()
+  await expect(route).toBeFocused()
+  await page.keyboard.press('a')
+  await expect(route.locator('option:checked')).toHaveText('Anime')
+  await expect(season).toContainText('Route：Anime')
+  await expect(season.getByRole('button', { name: '確認這 13 項' })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'card-13')
+
+  // 兩部作品：一部一組；兩部的可選 Route 有交集（都是電視），所以最上面有「全部套用」。
+  await panel.getByRole('button', { name: '新對話' }).click()
+  await expect(panel.getByText(/問 Berth 裡的事/)).toBeVisible()
+  await input.fill('下載 SPY×FAMILY 和芙莉蓮')
+  await input.press('Enter')
+  const both = panel.getByRole('region', { name: '送出下載' })
+  await expect(both.getByRole('checkbox')).toHaveCount(4)
+  const perWork = both.getByRole('combobox', { name: /的 Route$/ })
+  await expect(perWork).toHaveCount(2)
+  await expect(perWork.nth(0)).toHaveValue('')
+  await expect(perWork.nth(1)).toHaveValue('')
+  const applyAll = both.getByRole('combobox', { name: '全部套用' })
+  await expect(applyAll).toBeVisible()
+  await expect(both).toContainText('兩部以上作品有共同的 Route')
+  await expect(both).toContainText('Route：還沒選')
+  await both.getByRole('heading', { name: '送出下載' }).scrollIntoViewIfNeeded()
+  await shot(page, 'card-two-works-unpicked')
+
+  // 「全部套用」一次填滿兩組（鍵盤 type-ahead），之後仍可單獨改。
+  await applyAll.focus()
+  await expect(applyAll).toBeFocused()
+  await page.keyboard.press('a')
+  await expect(applyAll.locator('option:checked')).toHaveText('Anime')
+  const chosen = await applyAll.inputValue()
+  await expect(perWork.nth(0)).toHaveValue(chosen)
+  await expect(perWork.nth(1)).toHaveValue(chosen)
+  await expect(both.getByRole('button', { name: '確認這 4 項' })).toBeVisible()
+  await both.getByRole('heading', { name: '送出下載' }).scrollIntoViewIfNeeded()
+  await shot(page, 'card-two-works')
+  await expectNoHorizontalScroll(page)
+})
+
 test('送單卡：出卡、重新載入之後照樣按得下去、取消一列、選 Route 再確認，只送出勾著的', async ({
   page,
 }) => {

@@ -216,6 +216,7 @@ from tests.e2e.payload import info_name
 
 # 替身 TMDB 的 SPY×FAMILY（詳情、季、絕對編號）與整合測試同一份：`issues` 情境的認領與反解
 # 要的正是測試裡那一部，另抄一份的話兩邊的季集遲早對不上（M2 票 10）。
+from tests.integration.test_media import MOANA, SPY
 from tests.integration.test_media import SEASONS as SPY_SEASONS
 from tests.integration.test_media import tmdb as demo_tmdb
 from tests.integration.test_rss import FEED as RSS_FEED
@@ -2002,7 +2003,10 @@ def agent_scenario() -> Scenario:
     用工具結果的結論分類回答；問到「圖片」時回一張外部圖片的 markdown（側面板不該去載它）。
     說「下載 SPY×FAMILY」（`Download SPY×FAMILY`）時它搜作品、搜發佈、問 Route，再出一張
     三列的送單卡（票 13）；按了之後照逐列結果說送了幾筆。索引站多三筆單集（`AGENT_RELEASES`），
-    qBittorrent 收下就留著。說「一直查」（`keep checking`）時同一個呼叫一直叫，第 4 次被防護中止
+    qBittorrent 收下就留著。「下載整季 SPY×FAMILY」出一張 **13 列同一部作品**的卡（數量閘的上限，
+    `AGENT_SEASON_RELEASES`）；「下載 SPY×FAMILY 和芙莉蓮」出一張 **兩部作品**的卡，兩部都放得進
+    兩條電視 Route，所以有「全部套用」（M5.6 票 10，`AGENT_FRIEREN_RELEASES`）。
+    說「一直查」（`keep checking`）時同一個呼叫一直叫，第 4 次被防護中止
     （票 21 的步驟頁）。說「慢慢查」（`take your time`）時翻三頁 Job、每一次模型呼叫先等
     `SLOW_SECONDS`，最後說翻完了（票 25：重新整理之後那一輪接著跑完）。
     「加這個 RSS：<網址>」出一張加 Feed 的卡，
@@ -2018,9 +2022,20 @@ def agent_scenario() -> Scenario:
     """
     scenario = downloads_scenario()
     # 第一季每週一集，Jellyfin 有第 4、5 集（帳本沒有）：送單卡上那兩列由伺服器標「含已有」
-    # （票 28）。
+    # （票 28）。第二部作品是芙莉蓮（M5.6 票 10）：兩部作品的卡可以一次套用 Route。
     scenario.tmdb = demo_tmdb(
-        search={query: [SPY_ENTRY] for query in SPY_QUERIES}, seasons=SPY_WEEKLY_SEASONS
+        details=[SPY, MOANA, FRIEREN],
+        search={
+            **{query: [SPY_ENTRY] for query in SPY_QUERIES},
+            **{query: [FRIEREN_ENTRY] for query in FRIEREN_QUERIES},
+        },
+        seasons={**SPY_WEEKLY_SEASONS, **FRIEREN_SEASONS},
+        translations={
+            120089: "SPY×FAMILY 間諜家家酒",
+            # `demo_tmdb` 的預設值：這裡一覆寫就整份換掉，海洋奇緣那一部也要留著。
+            1241982: "海洋奇緣2",
+            FRIEREN_TMDB_ID: "葬送的芙莉蓮",
+        },
     )
     scenario.jellyfin_holding = (4, 5)
     scenario.ai_script = why_not_script
@@ -2030,7 +2045,12 @@ def agent_scenario() -> Scenario:
         packs, version=QbittorrentVersion(app="v5.2.3", webapi="2.15.1")
     )
     # `/demo/torrent` 只發這裡列的那幾份（`_mount_demo_torrent`）。
-    scenario.demo_releases = (*scenario.demo_releases, *AGENT_RELEASES)
+    scenario.demo_releases = (
+        *scenario.demo_releases,
+        *AGENT_RELEASES,
+        *AGENT_SEASON_RELEASES,
+        *AGENT_FRIEREN_RELEASES,
+    )
     # 兩種訂閱卡讀的頁（票 26）：番組頁、三個字幕組的單一 feed、acg.rip 的搜尋。
     scenario.feed_pages = {
         # `match_bangumi` 用作品的名字搜 Mikan（M5.6 票 08）：兩個名字都回同一個番組。
@@ -2062,7 +2082,11 @@ def agent_scenario() -> Scenario:
                 # 沒有 hash 時搜尋以 `guid` 去重（`IndexerResult.key`）：空的話三筆會併成一筆。
                 guid=release,
             )
-            for release, files in AGENT_RELEASES.items()
+            for release, files in {
+                **AGENT_RELEASES,
+                **AGENT_SEASON_RELEASES,
+                **AGENT_FRIEREN_RELEASES,
+            }.items()
         ),
     )
     return scenario
@@ -2231,6 +2255,82 @@ AGENT_RELEASES: dict[str, tuple[tuple[str, int], ...]] = {
 }
 DEMO_PACKS.update(AGENT_RELEASES)
 
+#: 「下載整季 SPY×FAMILY」（M5.6 票 10）：13 列同一部作品，正好是數量閘的預設上限
+#: （`AiSettings.card_downloads`）。第 1 集有兩個字幕組各發一份，其餘每集一份。
+AGENT_SEASON_RELEASES: dict[str, tuple[tuple[str, int], ...]] = {
+    **{
+        f"[Berth-Demo] SPY×FAMILY - {episode:02d} [1080p][CHT]": (
+            (f"[Berth-Demo] SPY×FAMILY - {episode:02d} [1080p][CHT].mkv", 40000),
+        )
+        for episode in range(1, 13)
+    },
+    "[LoliHouse] SPY×FAMILY - 01 [1080p][CHT]": (
+        ("[LoliHouse] SPY×FAMILY - 01 [1080p][CHT].mkv", 42000),
+    ),
+}
+DEMO_PACKS.update(AGENT_SEASON_RELEASES)
+
+#: 第二部作品（M5.6 票 10）：兩部作品的卡要一次套用 Route，所以第二部也得放得進同樣的那幾條
+#: （電視）。`芙莉蓮`、`Sousou no Frieren` 都是模型可能拿來搜的名字。
+FRIEREN_TMDB_ID = 209867
+FRIEREN_ENTRY = TmdbEntry(
+    tmdb_id=FRIEREN_TMDB_ID,
+    kind=MediaKind.TV,
+    title="Frieren: Beyond Journey's End",
+    original_title="葬送のフリーレン",
+    year=2023,
+    poster_path="",
+)
+FRIEREN = TmdbDetail(
+    tmdb_id=FRIEREN_TMDB_ID,
+    kind=MediaKind.TV,
+    title="Frieren: Beyond Journey's End",
+    original_title="葬送のフリーレン",
+    year=2023,
+    first_air_date=date(2023, 9, 29),
+    overview="The elf mage walks on after the hero's party is gone.",
+    poster_path="/frieren.jpg",
+    titles=(
+        "Frieren: Beyond Journey's End",
+        "葬送のフリーレン",
+        "葬送的芙莉莲",
+        "Sousou no Frieren",
+    ),
+    title_zh_cn="葬送的芙莉莲",
+    seasons=(
+        TmdbSeasonEntry(
+            season_number=1, name="Season 1", episode_count=3, air_date=date(2023, 9, 29)
+        ),
+    ),
+)
+FRIEREN_SEASONS = {
+    FRIEREN_TMDB_ID: [
+        TmdbSeason(
+            season_number=1,
+            name="Season 1",
+            air_date=date(2023, 9, 29),
+            episodes=tuple(
+                TmdbEpisode(
+                    season_number=1,
+                    episode_number=number,
+                    name=f"Episode {number}",
+                    air_date=date(2023, 9, 29) + timedelta(weeks=number - 1),
+                    runtime=24,
+                )
+                for number in (1, 2, 3)
+            ),
+        )
+    ]
+}
+#: 第二部作品的發佈：兩部作品的卡每部挑兩列（`_two_work_step`）。
+AGENT_FRIEREN_RELEASES: dict[str, tuple[tuple[str, int], ...]] = {
+    f"[Berth-Demo] Sousou no Frieren - {episode:02d} [1080p][CHT]": (
+        (f"[Berth-Demo] Sousou no Frieren - {episode:02d} [1080p][CHT].mkv", 38000),
+    )
+    for episode in (1, 2, 3)
+}
+DEMO_PACKS.update(AGENT_FRIEREN_RELEASES)
+
 #: `agent` 情境兩種訂閱卡的 SPY×FAMILY（票 26）：Mikan 番組 3310 上的三個字幕組（id → 名字、集數）。
 SPY_BANGUMI = 3310
 SPY_SUBGROUPS: dict[int, tuple[str, int]] = {
@@ -2320,6 +2420,33 @@ def _subscribed(text: str) -> re.Match[str] | None:
 
 _DOWNLOAD_ASKED = re.compile(r"^(?:下載|download)\s*(.+?)[。.!！]?$", re.I)
 
+#: 「下載整季 SPY×FAMILY」（M5.6 票 10）：13 列同一部作品。要在 `_DOWNLOAD_ASKED` 之前比對。
+_WHOLE_SEASON_ASKED = re.compile(
+    r"^(?:下載|download)\s*(?:整季|the whole season(?: of)?)\s*(.+?)[。.!！]?$", re.I
+)
+#: 「下載 SPY×FAMILY 和芙莉蓮」（M5.6 票 10）：一部作品一張卡、兩部作品就要一次套用 Route。
+_TWO_WORKS_ASKED = re.compile(r"^(?:下載|download)\s*(.+?)\s*(?:和|and)\s*(.+?)[。.!！]?$", re.I)
+
+
+def _download_intent(text: str) -> tuple[str, str, str] | None:
+    """這句話要下載什麼：`(kind, 第一個名字, 第二個名字)`，kind 是 `season`／`two`／`single`。
+
+    判斷只寫一份：請求那一步與後面的步驟都要知道同一件事，各判一次的話多一種問法要改兩處、
+    兩處的優先序還可能走樣（M5.6 票 10 的 code-review）。
+    """
+    stripped = text.strip()
+    season = _WHOLE_SEASON_ASKED.search(stripped)
+    if season is not None:
+        return ("season", season.group(1).strip(), "")
+    two = _TWO_WORKS_ASKED.search(stripped)
+    if two is not None:
+        return ("two", two.group(1).strip(), two.group(2).strip())
+    single = _DOWNLOAD_ASKED.search(stripped)
+    if single is not None:
+        return ("single", single.group(1).strip(), "")
+    return None
+
+
 #: 「加這個 RSS：<網址>」（票 14）：網址是使用者貼的，出卡。
 _FEED_GIVEN = re.compile(r"(?:加這個\s*RSS|add this RSS)[^h]*(https?://\S+)", re.I)
 #: 「上網找網址直接加」：假模型拿一個它「找到」的網址去加，被守法擋下。
@@ -2330,6 +2457,16 @@ FOUND_FEED_URL = "https://mikanani.me/RSS/Bangumi?bangumiId=3310&subgroupid=583"
 
 #: 替身 TMDB 認得的 SPY×FAMILY 查詢（`discover.normalise_query` 之後的樣子）。
 SPY_QUERIES = ("spy", "spy×family", "spy x family", "spy family", "間諜家家酒")
+
+#: 第二部作品（M5.6 票 10）認得的查詢：模型拿使用者打的名字或幾種常見寫法去搜。
+FRIEREN_QUERIES = (
+    "frieren",
+    "frieren: beyond journey's end",
+    "葬送のフリーレン",
+    "葬送的芙莉莲",
+    "sousou no frieren",
+    "芙莉蓮",
+)
 
 #: 假模型回答時的結論說法。真的模型自己會說；這裡只要看得出它用的是工具結果的分類。
 WHY_NOT_WORDS: dict[WhyNot, tuple[str, str]] = {
@@ -2523,7 +2660,13 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         if "一直查" in text or "keep checking" in text.lower():
             # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
-        wanted = _DOWNLOAD_ASKED.search(text.strip()) or _subscribed(text)
+        # 「整季 X」「X 和 Y」都先於一般的 `_DOWNLOAD_ASKED`（M5.6 票 10）。
+        intent = _download_intent(text)
+        if intent is not None:
+            return ModelResponse(
+                parts=[ToolCallPart("discover_search_media", {"query": intent[1]})]
+            )
+        wanted = _subscribed(text)
         if wanted is not None:
             return ModelResponse(
                 parts=[ToolCallPart("discover_search_media", {"query": wanted.group(1).strip()})]
@@ -2557,8 +2700,8 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
     if isinstance(last, ToolReturnPart) and _subscribed(question):
         return _subscribe_step(question, messages, last, chinese=chinese)
-    if isinstance(last, ToolReturnPart) and _DOWNLOAD_ASKED.search(question.strip()):
-        return _download_step(messages, last, chinese=chinese)
+    if isinstance(last, ToolReturnPart) and _download_intent(question) is not None:
+        return _download_step(question, messages, last, chinese=chinese)
     if isinstance(last, ToolReturnPart) and isinstance(last.content, dict):
         # 工具結果是執行器回的 JSON（`Turn.run_tool` 的 `to_jsonable_python`）。
         result: dict[str, Any] = cast(dict[str, Any], last.content)
@@ -2581,10 +2724,20 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
 
 
 def _download_step(
-    messages: list[ModelMessage], last: ToolReturnPart, *, chinese: bool
+    question: str, messages: list[ModelMessage], last: ToolReturnPart, *, chinese: bool
 ) -> ModelResponse:
     """「下載 SPY×FAMILY」的下一步：搜作品 → 搜發佈 → 出卡 → 照卡片的結果回答。
-    Route 由伺服器在提出時定（M5.6 票 04），模型不查也不給。"""
+    Route 由伺服器在提出時定（M5.6 票 04），模型不查也不給。
+
+    「整季」挑 `AGENT_SEASON_RELEASES` 的 13 列；「兩部作品」每部挑兩列
+    （`_two_work_step`，M5.6 票 10）。
+    """
+    intent = _download_intent(question)
+    assert intent is not None  # 呼叫端比對過
+    kind, _, second = intent
+    if kind == "two":
+        return _two_work_step(second, messages, last, chinese=chinese)
+    season = kind == "season"
     result: Any = last.content
     if last.outcome == "denied":
         return _say("好，那就不送。" if chinese else "All right, nothing was sent.")
@@ -2592,15 +2745,18 @@ def _download_step(
         items = result.get("items") or []
         if not items:
             return _say("找不到這部作品。" if chinese else "I could not find that title.")
-        return ModelResponse(
-            parts=[ToolCallPart("search_search_torrents", {"media_id": items[0]["id"]})]
-        )
+        # 整季一次要看一個字幕組的每一集：帶 `contains`，模型拿得到更多列（M5.6 票 05）。
+        args: dict[str, Any] = {"media_id": items[0]["id"]}
+        if season:
+            args["contains"] = ["CHT"]
+        return ModelResponse(parts=[ToolCallPart("search_search_torrents", args)])
     if last.tool_name == "search_search_torrents":
         media_id = _last_call_of(messages, "search_search_torrents")["media_id"]
+        wanted = AGENT_SEASON_RELEASES if season else AGENT_RELEASES
         rows = [
             {"source_id": row["source_id"], "media_id": media_id}
             for row in result.get("rows") or []
-            if row["title"] in AGENT_RELEASES
+            if row["title"] in wanted
         ]
         if not rows:
             return _say("沒有可以送的發佈。" if chinese else "There is nothing to send.")
@@ -2623,6 +2779,77 @@ def _download_step(
             else f"You confirmed: {done} sent, {skipped} unticked by you."
         )
     return _say("（沒有下一步）" if chinese else "(nothing more to do)")
+
+
+def _two_work_step(
+    second: str, messages: list[ModelMessage], last: ToolReturnPart, *, chinese: bool
+) -> ModelResponse:
+    """「下載 A 和 B」（M5.6 票 10）：一部作品搜一次、各挑兩列，一張卡兩部作品。
+
+    依序搜第一部、搜第二部、每部再搜發佈；卡片要在兩部作品的可選 Route 有交集時才畫得出
+    「全部套用」，所以第二部也是電視動畫。挑名字照 `_last_call_of`：每一步問的是這一輪最後一次叫的。
+    """
+    if last.outcome == "denied":
+        return _say("好，那就不送。" if chinese else "All right, nothing was sent.")
+    result: Any = last.content
+    if last.tool_name == "discover_search_media":
+        items = result.get("items") or []
+        if not items:
+            return _say("找不到這部作品。" if chinese else "I could not find that title.")
+        return ModelResponse(
+            parts=[ToolCallPart("search_search_torrents", {"media_id": items[0]["id"]})]
+        )
+    if last.tool_name == "search_search_torrents":
+        searched = _searched(messages)
+        if len(searched) == 1:
+            return ModelResponse(parts=[ToolCallPart("discover_search_media", {"query": second})])
+        rows: list[dict[str, str]] = []
+        for media_id, found in searched[:2]:
+            picks = [
+                row
+                for row in found
+                if row["title"] in AGENT_RELEASES or row["title"] in AGENT_FRIEREN_RELEASES
+            ][:2]
+            rows.extend({"source_id": row["source_id"], "media_id": media_id} for row in picks)
+        if not rows:
+            return _say("沒有可以送的發佈。" if chinese else "There is nothing to send.")
+        return ModelResponse(
+            parts=[ToolCallPart("downloading_add_manual_download", {"rows": rows})]
+        )
+    if last.tool_name == "downloading_add_manual_download" and isinstance(result, dict):
+        if "refused" in result:
+            return _say(
+                f"送不出去：`{result['refused']}`。"
+                if chinese
+                else f"It cannot be sent: `{result['refused']}`."
+            )
+        outcomes = [row["outcome"] for row in result.get("rows") or []]
+        done = outcomes.count("done")
+        skipped = outcomes.count("skipped")
+        return _say(
+            f"你確認了，已經送出 {done} 筆，{skipped} 筆你取消了勾選。"
+            if chinese
+            else f"You confirmed: {done} sent, {skipped} unticked by you."
+        )
+    return _say("（沒有下一步）" if chinese else "(nothing more to do)")
+
+
+def _searched(messages: list[ModelMessage]) -> list[tuple[str, list[dict[str, Any]]]]:
+    """這一輪每一次搜發佈的 `(media_id, rows)`，照呼叫順序。"""
+    calls = [
+        str(call.get("media_id", "")) for call in _calls_of(messages, "search_search_torrents")
+    ]
+    returns = [
+        cast(dict[str, Any], part.content)
+        for message in messages
+        if isinstance(message, ModelRequest)
+        for part in message.parts
+        if isinstance(part, ToolReturnPart) and part.tool_name == "search_search_torrents"
+    ]
+    return [
+        (media_id, list(found.get("rows") or []))
+        for media_id, found in zip(calls, returns, strict=False)
+    ]
 
 
 def _subscribe_step(
@@ -2655,16 +2882,20 @@ def _subscribe_step(
     return _say("（沒有下一步）" if chinese else "(nothing more to do)")
 
 
-def _last_call_of(messages: list[ModelMessage], tool: str) -> dict[str, Any]:
-    """這一輪最後一次叫 `tool` 的參數。"""
-    calls = [
-        call
+def _calls_of(messages: list[ModelMessage], tool: str) -> list[dict[str, Any]]:
+    """這一輪叫過 `tool` 的每一次參數，照呼叫順序。"""
+    return [
+        dict(call.args_as_dict())
         for message in messages
         if isinstance(message, ModelResponse)
         for call in message.tool_calls
         if call.tool_name == tool
     ]
-    return dict(calls[-1].args_as_dict())
+
+
+def _last_call_of(messages: list[ModelMessage], tool: str) -> dict[str, Any]:
+    """這一輪最後一次叫 `tool` 的參數。"""
+    return _calls_of(messages, tool)[-1]
 
 
 def _feed_step(question: str, last: ToolReturnPart, *, chinese: bool) -> ModelResponse:

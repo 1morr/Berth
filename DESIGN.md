@@ -630,7 +630,7 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   在亮色主題的紙白 `hull` 上壓深不了，一條 2px 的框過不了非文字對比 3:1；`blocked-ink` 在亮色主題壓深、深色主題與漆同值
   （M3 驗收輪 `d03f6dd`）。紅框在這裡仍然是「擋住了」——寫壞的欄位在改好之前送不出去（The One Meaning Rule 沒有被借出去）。
 - **Disabled:** `well` 底 + `ink-dim` 字。
-- **Checkbox:** 原生 `input[type=checkbox]`，`accent-color: var(--color-assigned)`，`size-4`。
+- **Checkbox:** 原生 `input[type=checkbox]`，`accent-color: var(--color-assigned)`，`size-4`。`tone="neutral"`（`accent-color: var(--color-ink)`）只給一整批列的勾選框（確認卡，M5.6 票 10）：十幾個全勾是常態，不是「要你」的訊號——The Usual Stays Unpainted Rule，黃留給「要你確認」與確認鍵。
 - **Select:** 原生 `select`，與輸入框同一套外觀（`hull` + `border-2 border-rule-strong` + `.value text-sm`，focus 換 `ink`）；
   篩選列上的小一號是 `px-2 py-1`。**只在真的有得選時畫**：Feed 的「自動綁定送進」（`FeedRoutePicker`，M3 票 21）只列
   啟用中的 Route，少於兩條時整格不出現（只有一條時沒什麼好選，停用的那條自動綁定本來就不看）；第一個選項是「不指定」。
@@ -1119,15 +1119,16 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   （`whitespace-pre-wrap`，不走 markdown）；沒有字的（服務遮掉的推理）不畫，也不為它標「助理」。
 - **確認卡**（`agent/ConfirmCard`，M5 票 13）：畫在提出它的那一格工具呼叫上（有 Proposal 對得上 `tool_call_id` 的那一格），長相由命令決定、不由模型決定。
   等人按時是 `well` 底 + `border-2 border-rule-strong`、抬頭一塊 `assigned` 色塊「要你確認」+ 命令的人話名稱；按過之後色塊拿掉、框退回 `rule`、底沉到 `hull`。
-  抬頭下是效果（`.label`：不可逆、會送出 torrent……，照伺服器提出時算的效果與旗標）與「期限：」+ `Timestamp`。
+  抬頭下一行是**規模**（M5.6 票 10）：`text-xs` 的一行「13 項 ‧ 共 510 KB ‧ 已勾 13/13 ‧ Route：還沒選」，數字那幾格是 `.value`（The Tabular Rule）——被 Route 擋住時，這是卡上唯一說得出「這次會送多少」的地方。再來是效果（`.label`：不可逆、會送出 torrent……，照伺服器提出時算的效果與旗標）與「期限：」+ `Timestamp`。
   每一列一塊、`border-t-2 border-rule` 隔開：送單列出發佈、大小、作品、Route（作品名與 Route 名取作品頁那一份），其他命令印參數原文。
   **作品放得進的 Route 不只一條時，同一部作品只問一次**（M5.6 票 03）：列依 `media_id` 分組，卡片上方一組一個 `.label` 加必選的下拉（多部作品時標出是哪一部），
   套到那組勾著的每一列；兩部以上作品、可選的 Route 有交集時，最上面多一個「全部套用」的下拉，選了填進每一組、之後仍可逐組改（全部一致時它顯示那個值，有人改過就回到沒選）。
-  列裡的 Route 那一格只重述那一組選的那一條，不再是下拉。
-  **送單卡重述會寫死的資料夾名**（同作品頁的 `SubmitAction`，M5 票 22）：效果底下 `.label`「資料夾」+ `.value wrap-anywhere`，
+  列裡的 Route 那一格只重述那一組選的那一條（還沒選時寫 `agent.card.routeNotChosen`「還沒選」，不是破折號），不再是下拉。「全部套用」只在畫得出來時出現，它的說明寫在那個下拉底下，不留在上方那段引導句裡。
+  **送單卡重述會寫死的資料夾名**（同作品頁的 `SubmitAction`，M5 票 22）：Route 的選擇之後 `.label`「資料夾」+ `.value wrap-anywhere`，
   加一句「送單成功那一刻這串字就定下來」，同一部作品只印一次。出自外部來源的欄位旁一個 `border-2 border-rule-strong` 的
   `.label`「出自外部來源」：是提醒不是阻擋，不用 `blocked` 紅（The One Meaning Rule）。
-  多列是總覽卡：每列一個原生 `Checkbox`（標籤是發佈名，欄位裡不再印一次），預設全勾；一列都沒勾時主要鍵不畫，那一格一句「全部不要的話按拒絕」。
+  多列是總覽卡：每列一個原生 `Checkbox`（標籤是發佈名，欄位裡不再印一次），預設全勾；批次列（兩列以上）的勾選框用中性勾（`Checkbox` 的 `tone="neutral"`）。「含已有的…」那一行是那一列勾選框的 `aria-describedby`（M5.6 票 10 的 audit）。一列都沒勾時主要鍵不畫，被擋住的那一句（一列都沒勾／還沒選 Route／還沒選字幕組）畫在常駐的 `role="status"` 裡——同一張卡只有這一個 live region；Route 的下拉標 `aria-invalid`、`aria-describedby` 指到它。五列以上的卡，決定那一區（那一句、錯誤與確認／拒絕）貼在面板底端（`sticky bottom-0`、`bg-well`、上緣 `border-t-2 border-rule`），捲列時主要動作還在同一個位置。
+  **訂閱卡的第一輪**（下載現有的／只追之後的，票 26）那兩個選項的標題是「現在送出什麼」，與上面那一份「第一批」的發佈清單分開；它的後果只說一次，由那兩個選項的說明接手（M5.6 票 10 的 critique）。
   按鍵排在 `CONFIRM_ACTIONS`：主要鍵說件數（「確認這 2 項」），Ghost「拒絕」。按下去就做：每一列底下一行 `.label` 結果（完成 / 被拒絕 + 那一組的理由句子 / 出錯 + 原文 / 沒勾，沒做），
   結論是一直掛著的 `role="status"`。脫離過的卡多一行 `text-xs ink-dim` 說「仍然有效，按了就直接執行」。它沒走 `ConfirmPanel`：不是一顆觸發鍵展開的就地確認，卡片本身就是確認區。
 - **圖片不載入**：markdown 圖片畫成一塊 `well` 底的「圖片沒有載入」+ 替代文字 + `.value` 網址原文（不是連結）。這是安全規則，不是樣式選擇。
