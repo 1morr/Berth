@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
 from itertools import zip_longest
+from typing import NamedTuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +54,7 @@ from berth.parser import (
     map_episode,
     mentions,
     misfit,
+    normalize_title,
     parse_release,
     partial_title,
     tags_of,
@@ -204,16 +206,24 @@ class SearchView:
     #: 每一類在每一站的總筆數（`VerdictCount`）。是 0 的那一組不列。
     counts: tuple[VerdictCount, ...] = ()
     #: 每個查詢回的筆數加起來（M4 票 69）。畫面上的幾個數字照這一條加得起來：
-    #: `returned = merged + Σ counts.total`。
+    #: `returned = merged + Σ counts.total`；帶 `contains` 時服務層另有 `filtered_out`（人用的
+    #: `GET /search` 不送它，所以畫面用不到那一項）。
     returned: int = 0
     #: 不同查詢（或不同站）回了同一個發佈，合併掉的筆數（`_dedupe`）。不叫 duplicates：
     #: CONTEXT.md 的 **Duplicate** 是帳本裡的重複版本。
     merged: int = 0
+    #: `contains` 篩掉的筆數（M5.6 票 05）。沒有 `contains` 時是 0。加起來仍然對得上：
+    #: `returned = merged + filtered_out + Σ counts.total`。不叫 narrowed：CONTEXT.md 的
+    #: **Narrowing** 是 Media Library 牆上依類型、年份縮小。
+    filtered_out: int = 0
     problem: IndexerProblem | None = None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str = ""
     #: 缺集搜尋時問的這一批。作品名與自己打的關鍵字沒有批次，是 `None`。
     batch: BatchView | None = None
+    #: 每一列的發佈名都含有的詞（原樣），空的是沒篩（M5.6 票 05）。給模型的那一份照它放寬列數
+    #: （`agent_tools._compact_search`）。
+    contains: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,10 +405,14 @@ def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
         "phrase instead. To look only for the episodes the library is missing, pass "
         "scope: {missing: true, season: <n>} (season works only together with missing); "
         "episodes the user's Jellyfin already has (in_jellyfin) are not missing. "
-        "Each row has a source_id: pass it to send that release as a download. "
-        "Rows come grouped by verdict, best matches first. You see the first 10, plus any "
-        "later fits row for an episode those do not cover; rows_not_shown says how many more "
-        "(counts has the totals). problem says why nothing came back."
+        "Pass contains to keep only releases whose name has every one of these words (case "
+        "and full-width or half-width do not matter): use it to list one subgroup's whole "
+        "season or one subtitle language in a single search instead of searching episode by "
+        "episode. Each row has a source_id: pass it to send that release as a download. "
+        "Rows come grouped by verdict, best matches first. You see the first 10 (more when "
+        "contains is given), plus any later fits row for an episode those do not cover; "
+        "rows_not_shown says how many more (counts has the totals). problem says why nothing "
+        "came back."
     ),
     audience=Role.USER,
 )
@@ -410,6 +424,7 @@ async def search_torrents(
     media_id: str,
     query: str = "",
     scope: QueryScope = DEFAULT_SCOPE,
+    contains: Sequence[str] = (),
     timeout: float = QUERY_TIMEOUT_SECONDS,
     access: JellyfinAccess | None = None,
 ) -> SearchView:
@@ -418,6 +433,10 @@ async def search_torrents(
     `query` 有值時取代 `scope`，只問這一個。`scope` 組出來的查詢比 `MAX_QUERIES` 多時
     **整次不問**（`TOO_MANY_QUERIES`），不砍尾巴——名字與季是使用者自己開的，默默少問幾個
     等於替他做了決定。
+
+    `contains` 是發佈名裡**每個詞都要有**（M5.6 票 05）：NFKC 與 casefold 之後的字串包含，
+    同 `parser.title.normalize_title`。字幕組、語言版本、解析度都用同一格，不另開專用欄位。
+    **先篩再截斷**（`_filter_out` 在每一類的上限之前）：不然另一組幾百筆做種多的發佈會把那幾集擠掉。
 
     **不限定站**：查詢問 Prowlarr 啟用中的每一站；各站多久能問幾次是 Prowlarr 的 Query Limit 的事
     （M4 票 107 刪掉 Berth 自己那一份請求預算）。
@@ -462,16 +481,56 @@ async def search_torrents(
         # ——那是索引站在、背後的站慢（M4 票 114）。
         return _blank(_problem(errors[0]), message(errors[0]))
     returned = [row for _, rows, _ in outcomes for row in rows]
-    found = _dedupe(returned)
+    deduped = _dedupe(returned)
+    words = _filter_words(contains)
+    found = _filter_out(deduped, words)
     judged = [judge(result) for result in found]
     return SearchView(
         rows=_rows(judged, snapshot, sources),
         counts=_counts(judged),
         returned=len(returned),
-        merged=len(returned) - len(found),
+        merged=len(returned) - len(deduped),
+        filtered_out=len(deduped) - len(found),
         attempts=tuple(attempt for attempt, _, _ in outcomes),
         batch=_batch(batches),
+        contains=tuple(word.text for word in words),
     )
+
+
+class _ContainsWord(NamedTuple):
+    """`contains` 的一格：原樣（報回 `SearchView.contains`）與正規化後（拿來比）。"""
+
+    text: str
+    target: str
+
+
+def _filter_words(contains: Sequence[str]) -> tuple[_ContainsWord, ...]:
+    """`contains` 的每一格與它正規化過的形式。**正規化之後什麼都不剩的是參數錯**：`!!!` 這種詞
+    比不到任何發佈名，默默當成沒篩會讓工具說明與行為對不起來（`normalize_title` 丟掉所有標點）。
+    """
+    words = tuple(_ContainsWord(word, normalize_title(word)) for word in contains)
+    empty = [word.text for word in words if not word.target]
+    if empty:
+        raise ValueError(f"contains words need a letter or digit to match: {empty}")
+    return words
+
+
+def _filter_out(
+    results: Sequence[IndexerResult], words: Sequence[_ContainsWord]
+) -> list[IndexerResult]:
+    """每個詞都出現在發佈名裡的那些（M5.6 票 05）。沒帶 `contains` 時原樣回。
+
+    比對用 `normalize_title`——與 `mentions` 同一個函式，全形與大小寫的差別在那一層收掉。
+    一次搜尋回一兩千筆，逐筆只做字串包含（同 `mentions` 的粗篩），不進解析器。
+    """
+    if not words:
+        return list(results)
+    kept: list[IndexerResult] = []
+    for row in results:
+        name = normalize_title(row.title)
+        if all(word.target in name for word in words):
+            kept.append(row)
+    return kept
 
 
 def _take(results: Sequence[Judged], limit: int) -> list[Judged]:

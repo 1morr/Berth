@@ -111,6 +111,8 @@ class SearchOut(BaseModel):
     #: 每一類在每一站的總筆數；是 0 的不列。
     counts: list[VerdictCountOut]
     #: 每個查詢回的筆數加起來（M4 票 69），畫面照這一條說：`returned = merged + Σ counts.total`。
+    #: 人用的這一支不送 `contains`（M5.6 票 05，那是給模型的），所以服務層的 `filtered_out`
+    #: 永遠是 0、不在這裡。
     returned: int
     #: 不同查詢或不同站回了同一個發佈，合併掉的筆數。
     merged: int

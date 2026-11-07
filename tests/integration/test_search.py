@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic_core import to_jsonable_python
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +33,7 @@ from berth.domain import (
 )
 from berth.models import IndexerSettings, Media, Route
 from berth.models import media_id as build_media_id
+from berth.services.agent_tools import MODEL_VIEWS
 from berth.services.search import (
     OTHERS_LIMIT,
     RESULT_LIMIT,
@@ -54,6 +56,12 @@ OPPENHEIMER = build_media_id(MediaKind.MOVIE, 872585)
 
 def result(title: str, **kwargs: Any) -> IndexerResult:
     return IndexerResult(title=title, **kwargs)
+
+
+def load_results(path: Path) -> tuple[IndexerResult, ...]:
+    """一份搜尋結果 fixture（一列一筆發佈）；分類碼轉成 `IndexerResult` 的 tuple。"""
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    return tuple(result(**{**row, "categories": tuple(row.get("categories", ()))}) for row in rows)
 
 
 def listed(view: SearchView, verdict: SearchVerdict = SearchVerdict.FITS) -> list[str]:
@@ -1163,7 +1171,7 @@ async def arrange_night(session: AsyncSession) -> None:
 
 
 def night_results() -> tuple[IndexerResult, ...]:
-    return tuple(result(**row) for row in json.loads(NIGHT_RESULTS.read_text(encoding="utf-8")))
+    return load_results(NIGHT_RESULTS)
 
 
 @pytest.mark.asyncio
@@ -1271,8 +1279,7 @@ async def arrange_nosferatu(session: AsyncSession) -> None:
 
 
 def nosferatu_results() -> tuple[IndexerResult, ...]:
-    rows = json.loads(NOSFERATU_RESULTS.read_text(encoding="utf-8"))
-    return tuple(result(**{**row, "categories": tuple(row["categories"])}) for row in rows)
+    return load_results(NOSFERATU_RESULTS)
 
 
 class TestNosferatu:
@@ -1569,3 +1576,217 @@ class TestVerdicts:
             (SearchVerdict.FITS, "The Pirate Bay", 2),
             (SearchVerdict.YEAR, "YTS", 1),
         ]
+
+
+HITODENASHI = build_media_id(MediaKind.TV, 274810)
+#: S7（M5.6 票 01）真模型逐字稿的搜尋結果（`.local/experiments/results/m5_acceptance/`
+#: `baseline-s7s8/anthropic-S7.md`）。13 集是喵萌奶茶屋的繁日雙語：片名 01、02、03、12、13
+#: 照逐字稿抄，
+#: 04–11 同一格式只換集數；info hash、大小、發佈時間照確認卡逐列抄。其餘三列是逐字稿裡的 7³ACG、
+#: Judas、SubsPlease（info hash 逐字稿截斷了，是假值；Judas 與 SubsPlease 的站與做種照抄）。
+#: TPB 那兩列不是逐字稿的（S7 的查詢只回 Mikan 與 Anime Tosho），是照原對話「查不到就回熱門清單」
+#: 補的，用來當「自己打的字對不上」那一類；發佈名照 TPB 的寫法造。
+HITODENASHI_RESULTS = Path(__file__).parents[1] / "fixtures" / "search" / "hitodenashi-2025.json"
+
+
+async def arrange_hitodenashi(session: AsyncSession) -> None:
+    session.add(
+        Media(
+            id=HITODENASHI,
+            tmdb_id=274810,
+            kind=MediaKind.TV,
+            title_en="This Monster Wants to Eat Me",
+            title_original="私を喰べたい、ひとでなし",
+            year=2025,
+            folder_name="This Monster Wants to Eat Me (2025) [tmdbid-274810]",
+            tmdb_snapshot_json={
+                "tmdb_id": 274810,
+                "kind": "tv",
+                "title": "對我垂涎欲滴的非人少女",
+                "title_en": "This Monster Wants to Eat Me",
+                "title_original": "私を喰べたい、ひとでなし",
+                "year": 2025,
+                "first_air_date": "2025-10-02",
+                "titles": [
+                    "This Monster Wants to Eat Me",
+                    "私を喰べたい、ひとでなし",
+                    "對我垂涎欲滴的非人少女",
+                ],
+                "seasons": [season_of(1, 13)],
+            },
+            tmdb_fetched_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
+
+
+def hitodenashi_results() -> tuple[IndexerResult, ...]:
+    return load_results(HITODENASHI_RESULTS)
+
+
+class TestContains:
+    """`contains`（M5.6 票 05）：發佈名裡每個詞都要有，先篩再截斷。
+
+    試用機上模型為了拿同一個字幕組的 13 集，一集搜了一次（9 次）；一次 `query` 加 `contains`
+    就該拿到整季。
+    """
+
+    @pytest.mark.asyncio
+    async def test_one_search_brings_a_subgroups_whole_season(self, session: AsyncSession) -> None:
+        await arrange_hitodenashi(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=hitodenashi_results()))
+
+        view = await search_torrents(
+            session,
+            factory,
+            SourceCache(),
+            media_id=HITODENASHI,
+            query="非人少女",
+            contains=["喵萌奶茶屋", "繁日"],
+        )
+
+        assert len(view.rows) == 13
+        assert {row.episode_start for row in view.rows} == set(range(1, 14))
+        assert view.contains == ("喵萌奶茶屋", "繁日")
+        # 給模型的那一份也一樣：放寬之後 13 集全給，不必逐集再搜。
+        given = MODEL_VIEWS["search.search_torrents"](to_jsonable_python(view))
+        assert isinstance(given, dict)
+        assert len(given["rows"]) == 13
+        assert "rows_not_shown" not in given
+
+    @pytest.mark.asyncio
+    async def test_width_and_case_do_not_matter(self, session: AsyncSession) -> None:
+        """發佈名的全形字與大小寫跟打的字不同也比得到：兩邊都過 `normalize_title`。"""
+        await arrange_hitodenashi(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=hitodenashi_results()))
+
+        view = await search_torrents(
+            session,
+            factory,
+            SourceCache(),
+            media_id=HITODENASHI,
+            query="非人少女",
+            contains=["watashi", "繁日"],
+        )
+
+        assert len(view.rows) == 13
+
+        # 反過來也一樣：發佈名是半形、打的字是全形。
+        other = await search_torrents(
+            session,
+            factory,
+            SourceCache(),
+            media_id=HITODENASHI,
+            query="非人少女",
+            contains=["Ｗａｔａｓｈｉ", "繁日"],
+        )
+        assert len(other.rows) == 13
+
+    @pytest.mark.asyncio
+    async def test_a_release_missing_any_one_word_is_left_out(self, session: AsyncSession) -> None:
+        await arrange_hitodenashi(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=hitodenashi_results()))
+
+        view = await search_torrents(
+            session,
+            factory,
+            SourceCache(),
+            media_id=HITODENASHI,
+            query="非人少女",
+            contains=["7³ACG", "BDrip"],
+        )
+
+        assert [row.title for row in view.rows] == [
+            "[7³ACG] 对我垂涎欲滴的非人少女/Watashi o Tabetai, Hitodenashi S01 | 01-13 "
+            "[简繁字幕] BDrip 1080p x265 OPUS 2.0"
+        ]
+
+    @pytest.mark.asyncio
+    async def test_without_contains_nothing_is_filtered(self, session: AsyncSession) -> None:
+        """人用的搜尋端點沒帶 `contains`：每一類照舊都送，規則不變。"""
+        await arrange_hitodenashi(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=hitodenashi_results()))
+
+        view = await search_torrents(
+            session, factory, SourceCache(), media_id=HITODENASHI, query="非人少女"
+        )
+
+        assert view.contains == ()
+        assert count(view, SearchVerdict.TYPED_MATCH) == 15
+        assert count(view, SearchVerdict.TYPED_MISS) == 3
+
+    @pytest.mark.asyncio
+    async def test_the_numbers_still_add_up(self, session: AsyncSession) -> None:
+        """篩掉的筆數另外報（`filtered_out`）：`returned` 是 `merged`、篩掉的與各類總數的和。"""
+        await arrange_hitodenashi(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=hitodenashi_results()))
+
+        view = await search_torrents(
+            session,
+            factory,
+            SourceCache(),
+            media_id=HITODENASHI,
+            query="非人少女",
+            contains=["喵萌奶茶屋", "繁日"],
+        )
+
+        assert view.filtered_out == 5
+        assert view.returned == view.merged + view.filtered_out + sum(
+            one.total for one in view.counts
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_word_with_nothing_to_match_is_refused(self, session: AsyncSession) -> None:
+        """`!!!` 正規化之後是空的，比不到任何發佈名；默默當成沒篩會與工具說明對不起來。"""
+        await arrange_hitodenashi(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=hitodenashi_results()))
+
+        with pytest.raises(ValueError, match="letter or digit"):
+            await search_torrents(
+                session,
+                factory,
+                SourceCache(),
+                media_id=HITODENASHI,
+                query="非人少女",
+                contains=["喵萌奶茶屋", "!!!"],
+            )
+
+    @pytest.mark.asyncio
+    async def test_the_filter_runs_before_the_per_kind_cap(self, session: AsyncSession) -> None:
+        """先篩再截斷：另一組的做種多得多時，前 100 筆全是它；篩完那 13 集照樣進得來。"""
+        await arrange_hitodenashi(session)
+        await arrange_indexer(session)
+        noisy = tuple(
+            result(
+                f"[ANi] 想吃掉我的非人少女 - {n:02d} [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+                indexer="Mikan",
+                seeders=1000 + n,
+                info_hash=f"{n:040x}",
+            )
+            for n in range(1, 121)
+        )
+        factory = FakeClientFactory(
+            indexer_search=FakeIndexerSearch(results=(*noisy, *hitodenashi_results()))
+        )
+
+        plain = await search_torrents(
+            session, factory, SourceCache(), media_id=HITODENASHI, query="非人少女"
+        )
+        filtered = await search_torrents(
+            session,
+            factory,
+            SourceCache(),
+            media_id=HITODENASHI,
+            query="非人少女",
+            contains=["喵萌奶茶屋", "繁日"],
+        )
+
+        assert len(listed(plain, SearchVerdict.TYPED_MATCH)) == RESULT_LIMIT
+        assert len(filtered.rows) == 13
+        assert {row.episode_start for row in filtered.rows} == set(range(1, 14))

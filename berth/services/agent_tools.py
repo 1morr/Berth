@@ -88,11 +88,15 @@ def _compact_search(result: object) -> object:
     **只給前 `MODEL_SEARCH_ROWS` 列與它們沒涵蓋到的集**（票 23d，`_rows_to_show`），其餘只說有幾列
     （`rows_not_shown`）：結果留在這一輪的上下文裡、之後每次呼叫都重送，Re:Zero 找種子時搜了 19 次，
     每次呼叫多約 7K input，撞到每輪 400K。
-    各類的總數在 `counts`，要更準的用 `query` 再搜。"""
+    各類的總數在 `counts`，要更準的用 `query` 再搜。
+
+    **帶 `contains` 的那一次放寬到 `MODEL_SEARCH_ROWS_NARROWED`**（M5.6 票 05）：結果已經篩過，
+    一列往往就是一集，13 集一季要一次進得來。"""
     if not isinstance(result, dict) or not isinstance(result.get("rows"), list):
         return result
     rows = result["rows"]
-    shown = _rows_to_show(rows)
+    limit = MODEL_SEARCH_ROWS_NARROWED if result.get("contains") else MODEL_SEARCH_ROWS
+    shown = _rows_to_show(rows, limit)
     given = {**result, "rows": [_compact_row(row) for row in shown]}
     if len(rows) > len(shown):
         given["rows_not_shown"] = len(rows) - len(shown)
@@ -102,18 +106,28 @@ def _compact_search(result: object) -> object:
 #: 一次種子搜尋給模型看的列數；前面的列沒涵蓋到的集，後面「符合」的列照樣給（`_rows_to_show`）。
 MODEL_SEARCH_ROWS = 10
 
+#: 帶 `contains` 時的上限（M5.6 票 05）：結果已經篩到一個字幕組、一種語言版本，一列往往就是一集。
+#: 量出來的那一份（`_compact_search` 的輸出，`tests/fixtures/search/hitodenashi-2025.json`，
+#: `json.dumps(ensure_ascii=False)`，cl100k_base）：同一組 13 列，沒放寬（10 列）約 2.5K tokens，
+#: 13 列全給約 3.2K（每列約 240）；一個字幕組一天發兩種解析度（26 列）時上限 20 約 5.0K。一次逐集
+#: 搜尋光是重送上下文就約 7K（`_compact_search` 的註解），所以取 20（預設的兩倍）：13 集整季進得來，
+#: 還留得下幾列別解析度或版本。
+MODEL_SEARCH_ROWS_NARROWED = 20
 
-def _rows_to_show(rows: list[object]) -> list[object]:
-    """前 `MODEL_SEARCH_ROWS` 列，加上之後每一列「符合」而帶來新的集的（照原本的順序）。
+
+def _rows_to_show(rows: list[object], limit: int) -> list[object]:
+    """前 `limit` 列，加上之後每一列「符合」而帶來新的集的（照原本的順序）。
 
     補缺集一季只搜一次（`missing-episodes`）：一季缺十幾集、每集各自一個發佈時，前 10 列常被幾集的
-    好幾個版本佔滿（票 23d 的紅燈）。不靠模型再搜：每一集至少有一列進得來，多的才不給。"""
+    好幾個版本佔滿（票 23d 的紅燈）。不靠模型再搜：每一集至少有一列進得來，多的才不給。
+
+    `limit` 由呼叫端給：帶 `contains` 的那一次放寬（`MODEL_SEARCH_ROWS_NARROWED`）。"""
     shown: list[object] = []
     covered: set[tuple[int, int | None]] = set()
     for index, row in enumerate(rows):
         spans = _episodes(row)
         new = {span for span in spans if span not in covered and (span[0], None) not in covered}
-        if index < MODEL_SEARCH_ROWS or new:
+        if index < limit or new:
             shown.append(row)
             covered |= spans
     return shown
