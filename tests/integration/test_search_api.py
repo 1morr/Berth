@@ -35,7 +35,16 @@ from tests.conftest import TMDB_API_KEY
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_media import MOANA as MOANA_DETAIL
-from tests.integration.test_media import MOANA_ID, ORDERING, SEASONS, SPY, SPY_ID
+from tests.integration.test_media import (
+    MOANA_ID,
+    ORDERING,
+    SEASONS,
+    SINGLE,
+    SINGLE_ID,
+    SINGLE_SEASONS,
+    SPY,
+    SPY_ID,
+)
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 #: `arrange` 寫進 `IndexerSettings` 的那一把：Prowlarr 的代理連結帶的就是它。
@@ -103,8 +112,8 @@ def factory(roots: dict[str, Path], indexer: FakeIndexerSearch) -> FakeClientFac
             users={CREW["username"]: CREW["password"]},
         ),
         tmdb=FakeTmdbClient(
-            details=[SPY, MOANA_DETAIL],
-            seasons=SEASONS,
+            details=[SPY, MOANA_DETAIL, SINGLE],
+            seasons={**SEASONS, SINGLE.tmdb_id: SINGLE_SEASONS},
             ordering=ORDERING,
             translations={120089: "SPY×FAMILY 間諜家家酒"},
         ),
@@ -419,6 +428,20 @@ class TestMissingEpisodes:
 
         assert [query.text for query in indexer.queries] == preview
         assert [attempt["step"] for attempt in body["attempts"]] == preview
+
+    def test_a_single_season_work_asks_by_name_alone(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        """只有一季的 CJK 作品，整季缺時問名字本身（M5.6 票 02、brief §20.28）：發佈名不寫季記號，
+        接上記號的查詢在 Mikan、dmhy、acg.rip 零筆。特別篇還沒播，不算一季。送出與預覽同一份。"""
+        sign_in(client)
+        preview = client.get(f"/api/search/queries?media={SINGLE_ID}&missing=true").json()
+
+        body = client.get(f"/api/search?media={SINGLE_ID}&missing=true").json()
+
+        assert preview["queries"] == ["私を喰べたい、ひとでなし"]
+        assert [query.text for query in indexer.queries] == preview["queries"]
+        assert body["batch"]["seasons"] == [1]
 
     def test_one_season_narrows_it(self, client: TestClient, indexer: FakeIndexerSearch) -> None:
         """展開區那一顆按鈕：只問那一季（shape §4）。"""

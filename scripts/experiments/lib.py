@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -219,3 +220,27 @@ class Report:
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"\n報告：{path}", flush=True)
         return path
+
+
+def norm_title(text: str) -> str:
+    """比對發佈名用的正規化：小寫、標點換成空白，頭尾各補一個空白（避免詞中間誤中）。"""
+    lowered = text.lower().replace(".", " ").replace("_", " ")
+    lowered = re.sub(r"[^\w㐀-鿿]+", " ", lowered)
+    return " " + re.sub(r"\s+", " ", lowered).strip() + " "
+
+
+def name_hit(title: str, aliases: Sequence[str]) -> bool:
+    """發佈名裡有沒有這部作品的任何一個名字（正規化後比對）。"""
+    haystack = norm_title(title)
+    return any(norm_title(alias) in haystack for alias in aliases)
+
+
+def prowlarr_search(base: str, key: str, query: str, *, limit: int = 100) -> list[dict[str, Any]]:
+    """Prowlarr 的關鍵字搜尋（`GET /api/v1/search?type=search`），回原始的 `ReleaseResource` 列。"""
+    url = f"{base}/api/v1/search?" + urllib.parse.urlencode(
+        {"query": query, "type": "search", "limit": limit}
+    )
+    req = urllib.request.Request(url, headers={"X-Api-Key": key})
+    with urllib.request.urlopen(req, timeout=180) as response:
+        rows: list[dict[str, Any]] = json.load(response)
+        return rows

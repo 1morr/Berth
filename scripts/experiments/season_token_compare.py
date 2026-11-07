@@ -20,11 +20,11 @@ import os
 import re
 import sys
 import time
-import urllib.parse
-import urllib.request
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+
+from lib import name_hit, norm_title, prowlarr_search
 
 MAX_QUERIES = 30
 SLEEP = 3.5
@@ -52,34 +52,13 @@ CASES: list[tuple[str, list[str], int, str, str]] = [
 ]
 
 
-def norm(s: str) -> str:
-    s = s.lower().replace(".", " ").replace("_", " ")
-    s = re.sub(r"[^\w\u3400-\u9fff]+", " ", s)
-    return " " + re.sub(r"\s+", " ", s).strip() + " "
-
-
-def name_hit(title: str, aliases: list[str]) -> bool:
-    t = norm(title)
-    return any(norm(a) in t for a in aliases)
-
-
 def marker(title: str, n: int) -> str:
-    t = norm(title)
+    t = norm_title(title)
     s_form = re.search(rf" s0*{n}(?: |e\d)", t) or re.search(rf" s0*{n}e\d", t)
     word = re.search(rf" (?:season|series) 0*{n} ", t) or re.search(rf"第\s*0*{n}\s*[季期]", t)
     if s_form and word:
         return "both"
     return "snn" if s_form else "season" if word else "none"
-
-
-def search(base: str, key: str, q: str) -> list[dict[str, Any]]:
-    url = f"{base}/api/v1/search?" + urllib.parse.urlencode(
-        {"query": q, "type": "search", "limit": 100}
-    )
-    req = urllib.request.Request(url, headers={"X-Api-Key": key})
-    with urllib.request.urlopen(req, timeout=180) as r:
-        rows: list[dict[str, Any]] = json.load(r)
-        return rows
 
 
 def main() -> int:
@@ -98,7 +77,7 @@ def main() -> int:
                 time.sleep(SLEEP)
             first = False
             try:
-                rows = search(base, key, q)
+                rows = prowlarr_search(base, key, q)
                 err = None
             except Exception as e:
                 rows, err = [], repr(e)

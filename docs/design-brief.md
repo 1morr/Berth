@@ -1909,3 +1909,28 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **TMDB 記的是電視台的日期，字幕組常從更早的平台取片**：2026 秋季的 ABEMA「地上波 1 週間先行」有 [転生したら剣でしたII](https://prtimes.jp/main/html/rd/p/000004053.000064643.html)、[転生した大聖女](https://prtimes.jp/main/html/rd/p/000004029.000064643.html)、[転生ゴブリン](https://prtimes.jp/main/html/rd/p/000004076.000064643.html)，[野生のラスボス第 2 期](https://gamebiz.jp/news/433310)同樣先行 1 週。
 - **正式環境量到發佈比 TMDB 早 4–8 天**（5 部 16 集）：深夜檔的 TMDB 日期常再晚一天，所以先行一週會量到 8 天。裝備仔早 4–5 天，沒有查到官方的先行公告。
 - **所以「發佈早於播出日超過兩天就一定算錯」不成立**（§20.11 的規則一、`parser/airing.py`）：照字面的讀法會被誤擋。改法在 plan §11.6b（2026-11-01 使用者定），M5.5 票 04 落地：照字面容忍九天、有換算的維持兩天（plan §4.4）；超過九天被擋的照字面列另記理由，「平台先行的核准就好」只對早不超過十四天的說，更早的叫人先查作品與 TMDB 的日期（票 04b：只對照字面說是使用者 2026-11-04 定；十四天上限是協調者同日追加，取量到的最大 8 天加約一週餘裕，沒有更長的先行樣本）。16 列做成 fixture `tests/fixtures/airing/simulcast-2026-fall.json`；2026-11-04 重查時 TMDB 已把野生的大魔王的日期改成 ABEMA 的日期，TMDB 的播出日本身也會移動。
+
+### 20.28 只有一季的作品：整季缺時不接季記號（2026-11-07 實測，M5.6 票 02）
+
+腳本 `scripts/experiments/single_season_marks.py`，本機 Prowlarr（Mikan、dmhy、ACG.RIP、Anime Tosho、The Pirate Bay、YTS；**Nyaa 連不上**，DNS／SSL，與 §20.21 同一個狀況）。逐查詢數每一站的總筆數與**發佈名含作品名字**的筆數（The Pirate Bay 對查不到的字回熱門清單，純筆數會騙人），以及名字對得上的那些自己寫了哪一種季記號。原始 JSON 在 `.local/experiments/results/single_season_marks.json`。
+
+| 作品 | 查詢 | 動畫站名字對得上的筆數 | 說明 |
+| --- | --- | --- | --- |
+| 私を喰べたい、ひとでなし（只有一季） | `私を喰べたい、ひとでなし 第1季` | Mikan、dmhy、ACG.RIP、Anime Tosho **0** | 只剩 The Pirate Bay 100、YTS 116 筆，名字對得上 0 |
+| 同上 | `私を喰べたい、ひとでなし` | Mikan 114、dmhy 80、ACG.RIP 30 | 全部對得上，**沒有一筆寫季記號** |
+| 同上（中文名） | `想吃掉我的非人少女 第1季` | **0** | 同上 |
+| 同上（中文名） | `想吃掉我的非人少女` | Mikan 138、dmhy 80、ACG.RIP 30 | 全部對得上 |
+| Death Note（只有一季，拉丁字） | `Death Note S01` | Mikan、dmhy、ACG.RIP **0**；Anime Tosho 43 | Anime Tosho 寬鬆比對，43 筆裡只有 12 筆真寫 `S01` |
+| 同上 | `Death Note Season 1` | 動畫站 **0**；Anime Tosho 6 | |
+| 同上 | `Death Note` | Mikan 13、dmhy 27、ACG.RIP 21、Anime Tosho 95 | |
+| 進撃の巨人（多季對照，CJK） | `進撃の巨人 第1季` | dmhy 18；Mikan **0** | 第 1 季的記號在 dmhy 問得到 |
+| 同上 | `進撃の巨人` | Mikan 78、dmhy 80 | 混著各季（Anime Tosho 的 100 筆裡 38 筆寫別季） |
+| SPY x FAMILY（多季對照，拉丁字） | `SPY x FAMILY S01` | Mikan、dmhy **各 1** | `S01` 幾乎沒有站用 |
+| 同上 | `SPY x FAMILY Season 1` | Mikan 181（**沒有一筆真寫 `Season 1`**，Mikan 是寬鬆比對）；Anime Tosho 39 筆真寫 `Season 1` | 與 §20.21 一致：動畫站寫 `Season N` |
+| 同上 | `SPY x FAMILY` | Mikan 949 | 混著各季 |
+
+- **只有一季的作品，發佈名不寫季記號**：Mikan、dmhy、ACG.RIP 對「名字 第1季」／`S01`／`Season 1` 一筆都不回，名字本身則整季都回得來。所以整季缺時問**名字本身**（`services/search_queries.missing_batches` 的 `single_season`），特別篇（`S00`）照舊接記號。
+- **多季作品照舊**：第 1 季的記號在 dmhy（CJK）問得到 18 筆，`Season N` 在 Anime Tosho 有 39 筆真寫；不接記號的名字會混進其他季，也會多吃 `MAX_QUERIES` 的配額。
+- **殘留**：多季 CJK 作品在 Mikan 對 `第1季` 零筆（`進撃の巨人 第1季`）。這張票只修只有一季的作品；要補的話是「第 1 季另送不帶記號的名字」那一種修法，會把其他季的發佈一起撈進來。
+- **量測的限制**：Prowlarr 的 REST 搜尋只回結果列、不回逐站成敗，所以「某站掛掉」與「某站 0 筆」在表上長得一樣；Nyaa 是從 Prowlarr 的 log（`Unable to connect to indexer`）與直接 curl 判定的。
+- The Pirate Bay、YTS 對查不到的查詢回一整頁無關結果（表上名字對得上 0 筆）——另一個問題，這個里程碑不修。
