@@ -1733,6 +1733,15 @@ class RssRefusal(StrEnum):
     FEED_UNPRIMED = "feed_unprimed"
     #: 輪詢間隔不在固定檔位裡（`models.rss.FEED_INTERVALS`，M4 票 109）。`detail` 是給的秒數。
     INTERVAL_UNSUPPORTED = "interval_unsupported"
+    #: 用作品的名字在 Mikan 搜不到番組，或搜到的幾個番組用開播日分不開（M5.6 票 08）。
+    #: `detail` 是作品在 Berth 手上的名字。退回關鍵字來源是票 09。
+    BANGUMI_NOT_FOUND = "bangumi_not_found"
+    #: 找到的番組頁上一個字幕組都沒有：Mikan 上沒人發這部作品（M5.6 票 08）。
+    #: `detail` 是番組名。
+    BANGUMI_WITHOUT_SUBGROUPS = "bangumi_without_subgroups"
+    #: 模型推薦的字幕組不在這個番組頁上（M5.6 票 08）。卡片上會讓人改選，所以只有卡片之外的
+    #: 路徑走得到（人提出的、MCP）。`detail` 是給的字幕組名。
+    SUBGROUP_NOT_FOUND = "subgroup_not_found"
 
 
 # --- 通知（plan §11.5〈通知〉、M4 票 123） ---

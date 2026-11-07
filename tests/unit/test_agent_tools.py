@@ -67,6 +67,7 @@ def test_which_writes_need_a_card() -> None:
         "downloading.add_manual_download",
         "rss.subscribe_mikan",
         "rss.subscribe_search",
+        "rss.subscribe",
         "rss.add_feed",
         "rss.delete_feed",
     }
@@ -90,7 +91,12 @@ def test_the_submit_card_takes_source_ids_never_links() -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["downloading.add_manual_download", "rss.subscribe_mikan", "rss.subscribe_search"],
+    [
+        "downloading.add_manual_download",
+        "rss.subscribe_mikan",
+        "rss.subscribe_search",
+        "rss.subscribe",
+    ],
 )
 def test_a_route_command_never_takes_a_route_from_the_model(name: str) -> None:
     """M5.6 票 04：會送進 Route 的命令，Route 由伺服器在提出時定。命令本身的輸入照舊有

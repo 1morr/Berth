@@ -980,6 +980,7 @@ class TestWhoCanUseWhat:
             "rss_add_feed",
             "rss_delete_feed",
             "rss_list_subscriptions",
+            "rss_subscribe",
             "rss_subscribe_mikan",
             "rss_subscribe_search",
             "search_search_torrents",

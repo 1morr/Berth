@@ -320,6 +320,17 @@ class TestAnnotatedLimits:
         assert found["fake.look"].injected == ("session", "actor")
         assert set(found["fake.look"].input.model_fields) == {"route_id"}
 
+    def test_a_work_subscription_only_asks_for_the_work_and_a_subgroup(self) -> None:
+        """`rss.subscribe`（M5.6 票 08）：番組由伺服器找，模型只給作品、推薦的字幕組與 Route。"""
+        model = registry.commands()["rss.subscribe"].input
+
+        assert set(model.model_fields) == {"media_id", "subgroup", "route_id"}
+        parsed = model.model_validate({"media_id": "tv:1", "subgroup": "ANi", "route_id": 1})
+        assert parsed.subgroup == "ANi"  # type: ignore[attr-defined]  # 動態推出的 model
+        for blank in ("", "  "):
+            with pytest.raises(ValidationError):
+                model.model_validate({"media_id": "tv:1", "subgroup": blank, "route_id": 1})
+
     def test_a_keyword_subscription_without_a_subgroup_is_refused_by_its_input(self) -> None:
         model = registry.commands()["rss.subscribe_search"].input
         row = {"kind": "nyaa", "term": "Kimi", "media_id": "tv:1", "route_id": 1}

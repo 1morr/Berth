@@ -2704,6 +2704,68 @@ async def _subscribe(
     )
 
 
+async def _can_subscribe(session: AsyncSession, *, media_id: str, route_id: int) -> None:
+    """`subscribe` 的乾跑：作品與 Route 的檢查。番組要找過 Mikan 才知道，留給執行時說。"""
+    await _target(session, media_id, route_id)
+
+
+@command(
+    Effect.REVERSIBLE,
+    flags={Flag.DOWNLOADS},
+    about=(
+        "Subscribe a work to Mikan: give the work's id and the subgroup you recommend. Berth "
+        "finds the bangumi by the work's titles and premiere date; the card lists the "
+        "subgroups it has and the user picks one. Reads the whole season, downloads what is "
+        "out and keeps downloading new episodes into the route. Use it for works Mikan "
+        "carries; when Berth finds no bangumi it refuses and says why."
+    ),
+    refusals=(RssRefusal,),
+    validate=_can_subscribe,
+)
+async def subscribe(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    *,
+    media_id: str,
+    subgroup: Annotated[str, Field(min_length=1, pattern=r"\S")],
+    route_id: int,
+    user_id: int | None,
+    actor: str,
+    now: datetime | None = None,
+) -> Subscription:
+    """以作品訂閱 Mikan（M5.6 票 08）：模型只說要訂哪部、要哪個字幕組。
+
+    「用作品的名字搜、用開播日挑番組」在 `services.bangumi.match_bangumi`
+    （規則本身是純函式 `parser.bangumi`，這張票之前寫在 skill 裡）。挑到番組之後走的就是
+    `subscribe_mikan` 的那一支 `_subscribe`：同一條單一 feed、同一個 RSS Series、同一套補舊集。
+
+    `subgroup` 是番組頁上的名字。卡片上人改選的字幕組蓋掉的也是這一格，所以核准之後照樣從這裡解；
+    Mikan 上沒有那一組是 `subgroup_not_found`。
+    """
+    # 本模組與 `services.bangumi` 互相 import（那一邊用 `unread` 與拒絕例外），所以延後到呼叫時。
+    from berth.services.bangumi import match_bangumi, subgroup_named
+
+    view = await match_bangumi(session, factory, media_id)
+    group = subgroup_named(view, subgroup)
+    if group is None:
+        raise RssRejectedError(RssRefusal.SUBGROUP_NOT_FOUND, subgroup)
+    moment = now or utcnow()
+    async with download_round(session, presser=user_id, now=moment) as batch:
+        return await _subscribe(
+            session,
+            factory,
+            bangumi_id=view.id,
+            subgroup_id=group.id,
+            media_id=media_id,
+            route_id=route_id,
+            bound_by=actor,
+            name="",
+            subgroup_name=group.name,
+            moment=moment,
+            batch=batch,
+        )
+
+
 async def _excluded_counts(session: AsyncSession, series_id: int) -> tuple[ExcludedCount, ...]:
     rows = await session.scalars(
         select(RssItem).where(

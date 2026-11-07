@@ -42,6 +42,8 @@ TOOLS: tuple[str, ...] = (
     "bangumi.read_bangumi",
     "rss.subscribe_mikan",
     "rss.subscribe_search",
+    # M5.6 票 08：以作品訂閱——伺服器自己找 Mikan 的番組，模型只給作品與推薦的字幕組。
+    "rss.subscribe",
     "rss.add_feed",
     # 票 26：重複訂閱要看得到、刪得掉（試用機上同一部作品兩份訂閱，助理只能說「留著」）。
     "rss.list_subscriptions",

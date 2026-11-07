@@ -141,8 +141,8 @@ class SubgroupOption:
     #: 關鍵字訂閱的第一批：按下確認就送出的發佈名，新的在前。Mikan 是空的（整季，筆數是
     #: `releases`）。
     titles: tuple[str, ...]
-    #: 選了這一個時蓋過存下參數的那幾格（Mikan：`subgroup_id` 與 `subgroup_name`；
-    #: 關鍵字：`subgroup`）。
+    #: 選了這一個時蓋過存下參數的那幾格（Mikan：`subgroup_id` 與 `subgroup_name`；以作品訂閱
+    #: `rss.subscribe`：`subgroup`；關鍵字：`subgroup`）。
     # `Any`：格子的型別隨命令（字幕組 id 是 int、名字是 str）。
     arguments: dict[str, Any]
 

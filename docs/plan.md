@@ -1233,7 +1233,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
   - **工具**是 `TOOLS`（`services/agent_tools.py`，與 skills 共用）裡的登錄表命令，看得到哪幾個照命令的 `audience`，呼叫一律經執行器、actor 是 `ai:<user id>`，每次工具呼叫一個 session。
     - 完整清單是 `TOOLS` 與 `ANIME_TOOLS`（`agent_tools.py`）；`web.tavily_search` 只在設了 Tavily key 時給。
     - 讀取類：`discover.search_media`、`discover.read_trending`、`why_not.explain`（說明寫出各結論的意思，M5.6 票 07）、`jobs.list_jobs`、`jobs.read_job_events`、`web.tavily_search`、`skills.load_skill`、`search.search_torrents`、`media.read_media`（`audience=user`；給模型的那一份沒有 `routes` 與 `default_route_id`，M5.6 票 04；整季以上都在 Jellyfin 時帶 `hint`，M5.6 票 07）、`routes.list_routes`、`bangumi.search_bangumi`、`bangumi.read_bangumi`、`ANIME_TOOLS`（動漫資料來源，§8.10）、`inventory.find_in_library`（用名字在這個人看得到的每一個媒體庫找，結果帶 `in_ledger`；劇集另有 `episodes`：Jellyfin 自己的季集號，依季收成範圍，不是 TMDB 的）、`rss.list_subscriptions`（不帶作品時列每一條訂閱）。
-    - 寫入類（都出確認卡，見 §7〈確認卡〉與〈守法〉）：`downloading.add_manual_download`（送單）、`rss.subscribe_mikan`、`rss.subscribe_search`、`rss.add_feed`、`rss.delete_feed`。
+    - 寫入類（都出確認卡，見 §7〈確認卡〉與〈守法〉）：`downloading.add_manual_download`（送單）、`rss.subscribe`（以作品訂閱：番組由伺服器找、用開播日挑，M5.6 票 08）、`rss.subscribe_mikan`、`rss.subscribe_search`、`rss.add_feed`、`rss.delete_feed`。
     - `routes.check_route(s)` 不給：探測會觸發使用者設的「完成時執行外部程式」。
   - **記帳與防護**是一個 capability（`_Guard`）：`wrap_model_request` 先看次數、做完當場寫 `ai_calls` 與 `ai_runs` 再看 token；`wrap_tool_execute` 管同工具同參數（命令拒絕、參數錯、命令出錯、結果帶 `problem` 的都不計）；`on_run_error` 補記串流時出錯的那次呼叫（串流時 `wrap_model_request` 只收到 `CancelledError`，brief §20.24）。
   - 停下來時（防護、出錯、按了停止、Berth 重新啟動）歷史存到最後一次模型呼叫之前那一段，後面接一則說明（哪一條、做到哪；`model_name` 是 `berth`），串流裡的 `error` 換成同一段字。token 超過上限時，那一則若還有要叫的工具就停、工具不跑；答完的那一則（已經整段串流出去）照樣留著。
@@ -1371,7 +1371,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 
 **訂閱的字幕組由人選**
 
-- 提出時逐列算預覽（`agent._PREVIEWS`）：Mikan 讀番組頁（`bangumi.read_bangumi`，已綁在作品上的字幕組除外）；關鍵字訂閱讀那一次搜尋（`rss.search_subgroups`，字幕組各帶第一批的發佈名；模型的那一列一定要給 `subgroup`）。讀不到就不出卡（`feed_unreachable`）。
+- 提出時逐列算預覽（`agent._PREVIEWS`）：Mikan 讀番組頁（`bangumi.read_bangumi`，已綁在作品上的字幕組除外）；以作品訂閱（`rss.subscribe`）先用作品的名字搜 Mikan、用開播日挑番組（`services.bangumi.match_bangumi`，規則在 `parser.bangumi`），找不到番組或番組上沒有字幕組都不出卡（M5.6 票 08）；關鍵字訂閱讀那一次搜尋（`rss.search_subgroups`，字幕組各帶第一批的發佈名；模型的那一列一定要給 `subgroup`）。讀不到就不出卡（`feed_unreachable`）。
 - 模型給的在選項裡才預選；選項不只一個或模型給的不在裡面時 `required`，卡片那一列是一排字幕組鍵、沒選不畫確認鍵。卡片結果多 `subgroup_chosen_on_card`。
 - 關鍵字訂閱帶 `downloads`：給了字幕組就當場送第一批。
 - 同一步算這部作品現有的訂閱（`rss.list_subscriptions`；加 Feed 只看得出 Mikan 單一 feed 的番組：`rss.subscriptions_of_feed_url`），存進 `existing`，卡片說出來、結果多 `existing_subscriptions`。
