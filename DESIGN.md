@@ -1121,6 +1121,9 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   等人按時是 `well` 底 + `border-2 border-rule-strong`、抬頭一塊 `assigned` 色塊「要你確認」+ 命令的人話名稱；按過之後色塊拿掉、框退回 `rule`、底沉到 `hull`。
   抬頭下是效果（`.label`：不可逆、會送出 torrent……，照伺服器提出時算的效果與旗標）與「期限：」+ `Timestamp`。
   每一列一塊、`border-t-2 border-rule` 隔開：送單列出發佈、大小、作品、Route（作品名與 Route 名取作品頁那一份），其他命令印參數原文。
+  **作品放得進的 Route 不只一條時，同一部作品只問一次**（M5.6 票 03）：列依 `media_id` 分組，卡片上方一組一個 `.label` 加必選的下拉（多部作品時標出是哪一部），
+  套到那組勾著的每一列；兩部以上作品、可選的 Route 有交集時，最上面多一個「全部套用」的下拉，選了填進每一組、之後仍可逐組改（全部一致時它顯示那個值，有人改過就回到沒選）。
+  列裡的 Route 那一格只重述那一組選的那一條，不再是下拉。
   **送單卡重述會寫死的資料夾名**（同作品頁的 `SubmitAction`，M5 票 22）：效果底下 `.label`「資料夾」+ `.value wrap-anywhere`，
   加一句「送單成功那一刻這串字就定下來」，同一部作品只印一次。出自外部來源的欄位旁一個 `border-2 border-rule-strong` 的
   `.label`「出自外部來源」：是提醒不是阻擋，不用 `blocked` 紅（The One Meaning Rule）。
