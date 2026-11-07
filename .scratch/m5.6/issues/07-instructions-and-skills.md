@@ -39,3 +39,4 @@
 - 2026-11-07 實作：`MISMATCH` 改成 `unchecked`——新 `download` skill 要模型在無法核對的季標這個字樣（英文固定 token），不再依賴舊 skill 的「未經核對」。
 - 2026-11-07 實作：B3 由 `TestNoWorkIsNamed` 守，掃內文與描述；作品名單（`NAMED_WORKS`）是手寫的驗收情境那幾部，新增情境點名新作品時要跟著加。雙向變異：內文寫進 `Re:Zero` 會紅，只改 frontmatter 格式不紅。
 - 2026-11-07 實作：`download` 第 3 步照舊 skill 保留無例外的標記規則（第 0 集、.5、總集篇、被移到特典、編號接續或跨季），免讓 S2-mushoku／S2-hxh 的範圍標記變差；第 1 步補上 `inventory_find_in_library` 的 `episodes`（票 06）。
+- 2026-11-07 補：系統指示第 2 條加一句「先認出作品（discover／TMDB），使用者選定前不搜發行」——通用規則，避免只說「找」就被讀成要來源（S8）；brief §14 同步。

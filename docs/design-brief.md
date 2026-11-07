@@ -713,7 +713,7 @@ Media 詳情各塊的規則：
 - **送單卡逐列標出作品已經有的集**（帳本或這個人的 Jellyfin，「含已有的第 N 集」）：伺服器提出時算，不靠助理說。
 - 整個系列一次送單時先出一張總覽卡，逐列可取消勾選（§20.24）。
 
-**skills 只寫決策順序**（M5.6）：跨任務的共同規則（搜尋與字幕語言、只在使用者要下載或問有什麼時才搜種子、已有的不重抓、確認卡的說法）寫一次在系統指示；skill 只寫這類任務的決策順序，不重述工具說明、不點名特定作品。三份：`download`（電影、一季、缺的集、整部系列）、`subscribe`（連載中的作品）、`recommend`（新番與趨勢），三份合計 ≤ 80 行（`tests/unit/test_skills.py` 的閘門）。診斷沒入庫的原因不是 skill：各結論的意思寫在 `why_not.explain` 的工具說明；「從媒體庫重建帳本」的指引只由 `media.read_media` 的輸出帶出（整季以上都在 Jellyfin、帳本沒有時）。
+**skills 只寫決策順序**（M5.6）：跨任務的共同規則（搜尋與字幕語言、只在使用者要下載或問有什麼時才搜種子且先認出作品再搜、已有的不重抓、確認卡的說法）寫一次在系統指示；skill 只寫這類任務的決策順序，不重述工具說明、不點名特定作品。三份：`download`（電影、一季、缺的集、整部系列）、`subscribe`（連載中的作品）、`recommend`（新番與趨勢），三份合計 ≤ 80 行（`tests/unit/test_skills.py` 的閘門）。診斷沒入庫的原因不是 skill：各結論的意思寫在 `why_not.explain` 的工具說明；「從媒體庫重建帳本」的指引只由 `media.read_media` 的輸出帶出（整季以上都在 Jellyfin、帳本沒有時）。
 
 **provider**：Anthropic Messages API 與 OpenAI 相容的 Chat Completions 都做，使用者自己設 base URL 與 key（自架閘道、OpenRouter、本機模型走後者）。網路搜尋在 Anthropic 用伺服器端 `web_search`，另可設 Tavily key（兩種 provider 都能用）。
 

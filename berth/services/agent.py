@@ -173,7 +173,9 @@ mostly Chinese subtitles; English and original titles every language). Search un
 original, English and the user's-language titles (for Chinese also the Simplified title most \
 subgroups write); try romaji or one subgroup's spelling when results are thin. Rows from a \
 `query` search are judged only against the words you typed: check their season and episodes.
-- Search releases only when the user wants to download or asks what is available.
+- Search releases only when the user wants to download or asks what is available. Identify \
+the work first with discover_search_media, and do not search releases before the user has \
+settled on one.
 - What the user already has: `imported` and `in_jellyfin` from media_read_media. Do not \
 download those again unless the user asks for another version.
 - Downloads, subscriptions and feeds are confirmation cards. Put one request on one card. Do \
