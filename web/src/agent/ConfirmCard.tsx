@@ -39,9 +39,11 @@ import { useCardActions } from './cards'
  * **按下去就做**：核准的回應裡就是逐列結果（會部分成功），畫在每一列上。之後才告訴對話（`respond`），
  * 讓助理接著說。
  *
- * **作品放得進的 Route 不只一條時，那一列的 Route 由人選**（票 23b）：清單是伺服器提出時存的
+ * **作品放得進的 Route 不只一條時，Route 由人選**（票 23b）：清單是伺服器提出時存的
  * （`preview.routes`），預選這部作品上次用的那一條、沒用過就不預選；勾著的列沒選齊之前確認鍵不畫
- * （DESIGN.md「先選再確認」），伺服器也只收清單裡的。
+ * （DESIGN.md「先選再確認」），伺服器也只收清單裡的。**一部作品只問一次**（M5.6 票 03）：卡片上的列
+ * 依 `media_id` 分組，一組一個選擇，套到那組勾著的每一列；兩部以上作品、可選的 Route 有交集時，
+ * 最上面多一個「全部套用」，之後仍可逐組改。
  *
  * **訂閱的字幕組由人選**（票 26）：選項是伺服器提出時讀番組頁或那一次搜尋存的（`preview.subgroups`），
  * 預選助理建議的那一個；`required` 的列沒選之前確認鍵同樣不畫。關鍵字訂閱列出選的那一組的第一批。
@@ -57,12 +59,27 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
   const many = rows.length > 1
   const asks = proposal.preview.routes
   const asking = asks.some((ask) => ask !== null)
-  const [picks, setPicks] = useState<readonly (number | null)[]>(() =>
-    rows.map((_, index) => asks[index]?.preselected ?? null),
+  // 一部作品只問一次：同一部作品的列共用一個選擇（M5.6 票 03）。
+  const routeGroups = groupRoutes(rows, asks)
+  const groupOf = new Map<number, RouteGroup>(
+    routeGroups.flatMap((group) => group.rows.map((index): [number, RouteGroup] => [index, group])),
   )
-  // 勾著、而且作品放得進的 Route 不只一條的列：要人選。
-  const choosing = (index: number) => asks[index] != null && ticked.has(index)
-  const unpicked = rows.filter((_, index) => choosing(index) && picks[index] === null).length
+  const [picks, setPicks] = useState<ReadonlyMap<string, number | null>>(
+    () => new Map(routeGroups.map((group) => [group.mediaId, group.ask.preselected ?? null])),
+  )
+  const pickOf = (group: RouteGroup) => picks.get(group.mediaId) ?? null
+  const routePick = (index: number) => {
+    const group = groupOf.get(index)
+    return group ? pickOf(group) : null
+  }
+  // 有勾著的列、而且作品放得進的 Route 不只一條的組：要人選。
+  const routeUnpicked = routeGroups.filter(
+    (group) => group.rows.some((index) => ticked.has(index)) && pickOf(group) === null,
+  ).length
+  const chooseRoute = (mediaId: string, route: number | null) =>
+    setPicks((old) => new Map(old).set(mediaId, route))
+  const applyRouteToAll = (route: number) =>
+    setPicks(new Map(routeGroups.map((group) => [group.mediaId, route])))
   const groupAsks = proposal.preview.subgroups
   const [groupPicks, setGroupPicks] = useState<readonly (string | null)[]>(() =>
     rows.map((_, index) => groupAsks[index]?.preselected ?? null),
@@ -92,11 +109,9 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
         // 全勾就是「全部」：不帶勾選，與單項卡同一個形狀。
         selection:
           approve && many && ticked.size < rows.length ? [...ticked].sort((a, b) => a - b) : null,
-        // 沒勾的列不送它的 Route：伺服器只要勾著的那幾列選齊。
+        // Route 照舊逐列展開；沒勾的列不送，伺服器只要勾著的那幾列選齊。
         ...(approve && asking
-          ? {
-              routes: rows.map((_, index) => (choosing(index) ? picks[index] : null)),
-            }
+          ? { routes: rows.map((_, index) => (ticked.has(index) ? routePick(index) : null)) }
           : {}),
         ...(approve && roundOffers.some(Boolean)
           ? {
@@ -151,7 +166,18 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
       </div>
 
       <Effects proposal={proposal} />
-      {waiting && asking ? <p className="text-xs text-ink">{t('agent.card.routeLead')}</p> : null}
+      {waiting && asking ? (
+        <>
+          <p className="text-xs text-ink">{t('agent.card.routeLead')}</p>
+          <RouteChoices
+            groups={routeGroups}
+            picks={picks}
+            disabled={decide.isPending}
+            onPick={chooseRoute}
+            onPickAll={applyRouteToAll}
+          />
+        </>
+      ) : null}
       {waiting && groupAsks.some((ask) => ask?.required) ? (
         <p className="text-xs text-ink">{t('agent.card.subgroupLead')}</p>
       ) : null}
@@ -170,11 +196,8 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
               torrents={proposal.preview.torrents[index]}
               route={{
                 ask,
-                // 等人按的時候是這一頁的選擇，按過之後是伺服器記下的那一條。
-                pick: waiting ? (picks[index] ?? null) : (proposal.routes?.[index] ?? null),
-                editable: waiting && !decide.isPending,
-                onPick: (route) =>
-                  setPicks((old) => old.map((value, at) => (at === index ? route : value))),
+                // 等人按的時候是這一頁上那部作品的選擇，按過之後是伺服器記下的那一條。
+                pick: waiting ? routePick(index) : (proposal.routes?.[index] ?? null),
               }}
               subgroup={{
                 ask: groupAsks[index] ?? null,
@@ -245,7 +268,7 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
             <RequestFailed error={decide.error} lead={t('agent.card.failed')} />
           ) : null}
           <div className={CONFIRM_ACTIONS}>
-            {ticked.size > 0 && unpicked === 0 && groupsUnpicked === 0 ? (
+            {ticked.size > 0 && routeUnpicked === 0 && groupsUnpicked === 0 ? (
               <PrimaryButton
                 type="button"
                 // `busy` 而不是 `disabled`：停用的鍵接不住焦點（DESIGN.md〈Buttons〉）。
@@ -267,8 +290,8 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
               <p className="text-xs text-ink-dim">
                 {ticked.size === 0
                   ? t('agent.card.noneTicked')
-                  : unpicked > 0
-                    ? t('agent.card.routeMissing', { count: unpicked })
+                  : routeUnpicked > 0
+                    ? t('agent.card.routeMissing', { count: routeUnpicked })
                     : t('agent.card.subgroupMissing', { count: groupsUnpicked })}
               </p>
             )}
@@ -444,13 +467,36 @@ interface Field {
   mono?: boolean
 }
 
-/** 一列的 Route 那一格（票 23b）：`ask` 不是 `null` 時由人選。 */
+/** 一列的 Route 那一格（票 23b）：`ask` 不是 `null` 時，值是卡片上面那部作品選的那一條。 */
 interface RouteSlot {
   ask: RouteAsk | null
   /** 選了哪一條；`null` 是還沒選（或沒得選）。 */
   pick: number | null
-  editable: boolean
-  onPick: (route: number | null) => void
+}
+
+/** 卡片上一部作品的一組列（M5.6 票 03）：同一部作品的 Route 只問一次。 */
+interface RouteGroup {
+  mediaId: string
+  rows: number[]
+  ask: RouteAsk
+}
+
+/** 列的 `media_id`；沒有的是 `null`（Route 的清單由伺服器照它算，所以有 `ask` 的列一定有）。 */
+function mediaIdOf(row: Row): string | null {
+  return typeof row.media_id === 'string' ? row.media_id : null
+}
+
+function groupRoutes(rows: readonly Row[], asks: readonly (RouteAsk | null)[]): RouteGroup[] {
+  const groups = new Map<string, RouteGroup>()
+  rows.forEach((row, index) => {
+    const ask = asks[index]
+    const mediaId = mediaIdOf(row)
+    if (ask === null || ask === undefined || mediaId === null) return
+    const found = groups.get(mediaId)
+    if (found) found.rows.push(index)
+    else groups.set(mediaId, { mediaId, rows: [index], ask })
+  })
+  return [...groups.values()]
 }
 
 /** 一列訂閱的字幕組（票 26）：`ask` 不是 `null` 時有選項；`required` 時由人選。 */
@@ -471,31 +517,154 @@ interface RoundSlot {
 }
 
 /**
- * Route 的值：要人選的列是必選的下拉（清單只有伺服器存下的那幾條），按過之後是選的那一條；
+ * Route 的值：要人選的作品是卡片上面選的那一條，按過之後是伺服器記下的那一條；
  * 沒得選的列照 `fallback`（模型給、伺服器驗過的那一條）。
  */
-function RouteValue({ route, fallback }: { route: RouteSlot; fallback: string }) {
-  const { t } = useTranslation()
+function RouteName({ route, fallback }: { route: RouteSlot; fallback: string }) {
   const { ask, pick } = route
   if (ask === null) return fallback
-  if (!route.editable) return ask.options.find((option) => option.id === pick)?.name ?? '—'
+  return ask.options.find((option) => option.id === pick)?.name ?? '—'
+}
+
+/**
+ * 卡片上面的 Route 選擇（M5.6 票 03）：一部作品一個選擇，套到它勾著的每一列；兩部以上作品、
+ * 可選的 Route 有交集時，最上面一個「全部套用」一次填滿，之後仍可逐組改。
+ */
+function RouteChoices({
+  groups,
+  picks,
+  disabled,
+  onPick,
+  onPickAll,
+}: {
+  groups: readonly RouteGroup[]
+  picks: ReadonlyMap<string, number | null>
+  disabled: boolean
+  onPick: (mediaId: string, route: number | null) => void
+  onPickAll: (route: number) => void
+}) {
+  const { t } = useTranslation()
+  if (groups.length === 0) return null
+  const pickOf = (group: RouteGroup) => picks.get(group.mediaId) ?? null
+  const shared = groups.length > 1 ? sharedRoutes(groups) : []
+  const first = pickOf(groups[0])
+  // 每一組選的都一樣時，全部套用照那個值畫；有人改過就回到沒選。
+  const sharedPick = groups.every((group) => pickOf(group) === first) ? first : null
   return (
-    <select
-      aria-label={t('agent.card.fields.route')}
-      required
-      value={pick ?? ''}
-      onChange={(event) =>
-        route.onPick(event.target.value === '' ? null : Number(event.target.value))
-      }
-      className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
-    >
-      <option value="">{t('agent.card.routeChoose')}</option>
-      {ask.options.map((option) => (
-        <option key={option.id} value={option.id}>
-          {option.name}
-        </option>
+    <div className="grid gap-2">
+      {shared.length > 0 ? (
+        <RouteSelect
+          label={t('agent.card.routeApplyAll')}
+          placeholder={t('agent.card.routeApplyAllChoose')}
+          // 全部套用是一個動作：沒選時顯示的那一項不是一個選得下去的狀態。
+          placeholderDisabled
+          required={false}
+          options={shared}
+          pick={sharedPick}
+          disabled={disabled}
+          onPick={(route) => {
+            if (route !== null) onPickAll(route)
+          }}
+        />
+      ) : null}
+      {groups.map((group) => (
+        <WorkRoute
+          key={group.mediaId}
+          group={group}
+          many={groups.length > 1}
+          pick={pickOf(group)}
+          disabled={disabled}
+          onPick={(route) => onPick(group.mediaId, route)}
+        />
       ))}
-    </select>
+    </div>
+  )
+}
+
+/** 一組（一部作品）的 Route：兩部以上作品時標出是哪一部。 */
+function WorkRoute({
+  group,
+  many,
+  pick,
+  disabled,
+  onPick,
+}: {
+  group: RouteGroup
+  many: boolean
+  pick: number | null
+  disabled: boolean
+  onPick: (route: number | null) => void
+}) {
+  const { t } = useTranslation()
+  const media = useQuery(mediaQueryOptions(group.mediaId))
+  // 作品名還沒讀到（或讀不到）時只寫 Route：作品 id 是機器字串，不放進 `.label`。
+  const title = media.data?.title
+  return (
+    <RouteSelect
+      label={
+        many && title ? t('agent.card.routeForWork', { work: title }) : t('agent.card.fields.route')
+      }
+      placeholder={t('agent.card.routeChoose')}
+      options={group.ask.options}
+      pick={pick}
+      disabled={disabled}
+      onPick={onPick}
+    />
+  )
+}
+
+function RouteSelect({
+  label,
+  placeholder,
+  placeholderDisabled = false,
+  required = true,
+  options,
+  pick,
+  disabled,
+  onPick,
+}: {
+  label: string
+  placeholder: string
+  placeholderDisabled?: boolean
+  /** 一組的 Route 是必選的；「全部套用」只是捷徑。 */
+  required?: boolean
+  options: RouteAsk['options']
+  pick: number | null
+  disabled: boolean
+  onPick: (route: number | null) => void
+}) {
+  const id = useId()
+  return (
+    <div className="grid gap-0.5">
+      <label htmlFor={id} className="label text-ink-dim">
+        {label}
+      </label>
+      <select
+        id={id}
+        required={required}
+        disabled={disabled}
+        value={pick ?? ''}
+        onChange={(event) => onPick(event.target.value === '' ? null : Number(event.target.value))}
+        className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
+      >
+        <option value="" disabled={placeholderDisabled}>
+          {placeholder}
+        </option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+/** 每一組都有的 Route：全部套用只列這些。 */
+function sharedRoutes(groups: readonly RouteGroup[]): RouteAsk['options'] {
+  const [first, ...rest] = groups
+  return first.ask.options.filter((option) =>
+    rest.every((group) => group.ask.options.some((other) => other.id === option.id)),
   )
 }
 
@@ -589,7 +758,7 @@ function SubscribeRowBody({
   round: RoundSlot
 }) {
   const { t } = useTranslation()
-  const mediaId = typeof row.media_id === 'string' ? row.media_id : ''
+  const mediaId = mediaIdOf(row) ?? ''
   const media = useQuery({ ...mediaQueryOptions(mediaId), enabled: mediaId !== '' })
   const given = media.data?.routes.find((choice) => choice.id === row.route_id)
   const mikan = command === 'rss.subscribe_mikan'
@@ -634,9 +803,7 @@ function SubscribeRowBody({
           {
             name: 'route_id',
             label: t('agent.card.fields.route'),
-            value: (
-              <RouteValue route={route} fallback={given?.name ?? `#${String(row.route_id)}`} />
-            ),
+            value: <RouteName route={route} fallback={given?.name ?? `#${String(row.route_id)}`} />,
           },
           {
             name: 'sends',
@@ -828,7 +995,7 @@ function SubmitRowBody({
       <dd className="text-ink">{media.data?.title ?? row.media_id}</dd>
       <dt className="label text-ink-dim">{t('agent.card.fields.route')}</dt>
       <dd className="text-ink">
-        <RouteValue route={route} fallback={given?.name ?? `#${row.route_id}`} />
+        <RouteName route={route} fallback={given?.name ?? `#${row.route_id}`} />
       </dd>
     </dl>
   )

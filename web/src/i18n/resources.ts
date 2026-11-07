@@ -4230,12 +4230,15 @@ const zhHant = {
       running: '執行中…',
       reject: '拒絕',
       noneTicked: '一列都沒勾。全部不要的話按「拒絕」。',
-      // 作品放得進的 Route 不只一條（M5 票 23b）：逐列在卡片上選，模型給的那一條不算數。
+      // 作品放得進的 Route 不只一條（M5 票 23b、M5.6 票 03）：一部作品選一次，模型給的那一條不算數。
       routeLead:
-        '這部作品放得進的 Route 不只一條：按確認前逐列選一條。這部作品送單過的話，預選上次用的那一條。',
+        '這部作品放得進的 Route 不只一條：一部作品選一次，套到它勾著的每一列。兩部以上作品有共同的 Route 時，最上面可以一次套用。這部作品送單過的話，預選上次用的那一條。',
       routeChoose: '選一條 Route',
-      routeMissing_one: '還有 {{count}} 列沒選 Route。',
-      routeMissing_other: '還有 {{count}} 列沒選 Route。',
+      routeForWork: '{{work}} 的 Route',
+      routeApplyAll: '全部套用',
+      routeApplyAllChoose: '選一條套用到全部',
+      routeMissing_one: '還有 {{count}} 部作品沒選 Route。',
+      routeMissing_other: '還有 {{count}} 部作品沒選 Route。',
       detached: '對話已經往下走了，這張仍然有效：按了就直接執行，助理下一則會知道結果。',
       failed: '這一下沒送出去',
       status: {
@@ -8700,10 +8703,13 @@ const en: Translations<typeof zhHant> = {
       reject: 'Reject',
       noneTicked: 'Nothing is ticked. To do none of it, press Reject.',
       routeLead:
-        'More than one route fits this work: choose one per row before confirming. If it was sent before, the route it used last is preselected.',
+        'More than one route fits this work: choose one per work, and every ticked row of that work uses it. When two or more works share a route, you can set them all at once at the top. If a work was sent before, the route it used last is preselected.',
       routeChoose: 'Choose a route',
-      routeMissing_one: 'Choose a route for {{count}} more row.',
-      routeMissing_other: 'Choose a route for {{count}} more rows.',
+      routeForWork: 'Route for {{work}}',
+      routeApplyAll: 'Apply to all',
+      routeApplyAllChoose: 'Choose one for every work',
+      routeMissing_one: 'Choose a route for {{count}} more work.',
+      routeMissing_other: 'Choose a route for {{count}} more works.',
       detached:
         'The conversation has moved on, but this card still holds: pressing it runs it right away, and the assistant hears the result in its next reply.',
       failed: 'That press did not go through',

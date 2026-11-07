@@ -1363,7 +1363,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 **Route 由人在卡片上選**
 
 - 命令輸入有 `media_id` 與 `route_id` 的（送單、兩種訂閱），`proposals.propose` 逐列查 `media.route_choices`。作品放得進的 Route 不只一條時，把清單與預選（這部作品的 `default_route_id`，在清單裡才算；模型給的那一條不算）存進預覽的 `routes`。
-- 卡片那一列是必選的下拉，沒選齊不畫確認鍵；`decide` 只收清單裡的。卡片結果那一列多 `route_chosen_on_card`。
+- 卡片上的列依 `media_id` 分組，一組一個必選的下拉，套到那組勾著的每一列（M5.6 票 03；前端展開成逐列送）；兩部以上作品的可選 Route 有交集時，頂部多一個「全部套用」，之後仍可逐組改。沒選齊不畫確認鍵；`decide` 只收清單裡的，沒勾的列送 `null`。卡片結果那一列多 `route_chosen_on_card`。
 - 原因：anthropic 在兩條電視 Route、作品沒有預設時不問就挑（[m5-acceptance](research/m5-acceptance-2026-10-28.md) 〈兩條電視 Route〉一節）。
 
 **訂閱的字幕組由人選**
