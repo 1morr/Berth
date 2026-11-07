@@ -1938,3 +1938,18 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **殘留**：多季 CJK 作品在 Mikan 對 `第1季` 零筆（`進撃の巨人 第1季`）。這張票只修只有一季的作品；要補的話是「第 1 季另送不帶記號的名字」那一種修法，會把其他季的發佈一起撈進來。
 - **量測的限制**：Prowlarr 的 REST 搜尋只回結果列、不回逐站成敗，所以「某站掛掉」與「某站 0 筆」在表上長得一樣；Nyaa 是從 Prowlarr 的 log（`Unable to connect to indexer`）與直接 curl 判定的。
 - The Pirate Bay、YTS 對查不到的查詢回一整頁無關結果（表上名字對得上 0 筆）——另一個問題，這個里程碑不修。
+
+### 20.29 以作品訂閱時選不出「第幾季」（2026-11-07 實測，M5.6 票 11）
+
+`rss.subscribe` 只收作品的 `media_id` 與字幕組，伺服器用 `services.bangumi.match_bangumi` 拿作品的 **`first_air_date`** 比對 Mikan 番組頁的開播日（設計在 plan §6〈agent〉與 M5.6 票 08 的 Comments）。同一部作品在 TMDB 只有一個條目、Mikan 卻每季各一頁時，首播年對到的是第一季那一頁。
+
+實測（真 TMDB、真 Mikan、DeepSeek `deepseek-flash`，兩種接口各一次，逐字稿在 `.local/experiments/results/m5_acceptance/after-core/` 的 `{anthropic,openai}-S1.md` 與 `anthropic-S6.md`）：
+
+| 情境 | 推薦的作品 | 伺服器挑到的番組 | 後果 |
+| --- | --- | --- | --- |
+| S1 | 《黑色五葉草 第二季》（`tv:73223`，2017 起的同一個 TMDB 條目，Season 2 在 2026） | Mikan 2017 年那一個（bangumi 1433） | 卡片列第一季的字幕組；按下確認後 backfill 送出 **100 筆** 2017–2021 的舊集 |
+| S6 | 《葬送的芙莉蓮 第二季》（TMDB 併進 Season 1 的 E29–E38） | Mikan 第一季的番組 | backfill 送出 **39 筆** S1 種子（同一集還有三種字幕變體） |
+
+模型兩個情境都自己發現（比對集數與發佈日）、刪掉訂閱並說明，但已經送進 qBittorrent 的送單要人清。基準（M5.6 之前）不會這樣：那時模型自己搜 Bangumi、自己挑番組 id。
+
+修法方向（未實作，排 M6 第一張票）：訂閱帶上「第幾季」，或把比對用的日期從作品首播日改成**使用者被推薦的那一季**的開播日（`media.read_media` 的季表每一季都有 `air_date`）。兩者都要處理「Mikan 把 split-cour 拆成兩頁」與「Mikan 的頁比 TMDB 的季粗」的情形；決定前先對 Mikan 的實頁再量一次。

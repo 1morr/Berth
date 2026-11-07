@@ -4,7 +4,7 @@
 """M5 驗收（票 23）與 M5.6 基準（票 01）：對產品的 `/agent/chat` 與 Proposal API，用真模型逐一跑側面板情境。
 
 M5.6 起 summary 另記種子搜尋次數（`S8` 量「還沒說要下載就搜」）與 skill 載入次數；要人選 Route 的列數
-M5 票 23b 起就有。
+M5 票 23b 起就有，票 11 再加「卡片上要選幾次」（一組一個選擇，同一部作品算一次）。
 情境 `S7` 是「非人少女」那段對話（原 conversation `b0e4f028`），`S8` 是它的模糊開頭；舊的 Route 情境
 改名 `S7-route`（M5 票 23b 的那一個，命名沿用 `S2-mushoku` 的變體慣例）。
 
@@ -484,6 +484,16 @@ def run_one(r: Runner, provider: str, sc: Scenario, cid: str) -> tuple[str, dict
         "skill_loads": sum(1 for t in tools if t["command"] == "skills.load_skill"),
         #: 要人選 Route 的列數，與按下去之後選的（票 23b）。
         "route_asks": sum(1 for p in cards for ask in p["preview"].get("routes") or [] if ask),
+        #: 卡片上真的要人動幾次（M5.6 票 03 起一組一個選擇，列依 `media_id` 分組）：同一個
+        #: `media_id` 的列算一次。`route_asks` 仍是逐列，之後比「選幾次」看這個。
+        "route_choices": len(
+            {
+                (p["id"], p["arguments"][index].get("media_id"))
+                for p in cards
+                for index, ask in enumerate(p["preview"].get("routes") or [])
+                if ask
+            }
+        ),
         "routes_chosen": [p.get("routes") for p in cards if p.get("routes")],
     }
     stats["cache_hit"] = round(stats["cache_read"] / stats["input"], 3) if stats["input"] else None
@@ -508,6 +518,7 @@ SUMMARY_KEYS = (
     "cards",
     "phrase_seen",
     "route_asks",
+    "route_choices",
     "seed_searches",
     "skill_loads",
     "crash",
@@ -550,9 +561,9 @@ def main() -> None:
                 )
         finally:
             server.stop()
-    head = "| 接口 | 情境 | 秒 | 輪 | 模型呼叫 | 工具 | input | 快取命中 | output | 網搜 | 費用 USD | 停止 | 工具結果 | 卡片 | 種子搜尋 | skill 載入 | Route 列數 | 出現標記字樣 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+    head = "| 接口 | 情境 | 秒 | 輪 | 模型呼叫 | 工具 | input | 快取命中 | output | 網搜 | 費用 USD | 停止 | 工具結果 | 卡片 | 種子搜尋 | skill 載入 | Route 列數 | Route 選擇 | 出現標記字樣 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
     rows = "".join(
-        f"| {s['provider']} | {s['scenario']} | {s.get('seconds')} | {s.get('runs')} | {s.get('requests')} | {s.get('tool_calls')} | {s.get('input', 0):,} | {s.get('cache_hit')} | {s.get('output', 0):,} | {s.get('web_searches', 0) + s.get('tavily_searches', 0)} | {s.get('cost_usd')} | {' '.join(s.get('stops') or [])} | {s.get('outcomes') or s.get('crash')} | {s.get('cards')} | {s.get('seed_searches', '')} | {s.get('skill_loads', '')} | {s.get('route_asks', '')} | {s.get('phrase_seen', '')} |\n"
+        f"| {s['provider']} | {s['scenario']} | {s.get('seconds')} | {s.get('runs')} | {s.get('requests')} | {s.get('tool_calls')} | {s.get('input', 0):,} | {s.get('cache_hit')} | {s.get('output', 0):,} | {s.get('web_searches', 0) + s.get('tavily_searches', 0)} | {s.get('cost_usd')} | {' '.join(s.get('stops') or [])} | {s.get('outcomes') or s.get('crash')} | {s.get('cards')} | {s.get('seed_searches', '')} | {s.get('skill_loads', '')} | {s.get('route_asks', '')} | {s.get('route_choices', '')} | {s.get('phrase_seen', '')} |\n"
         for s in summary
     )
     (a.out / "summary.md").write_text(head + rows)
