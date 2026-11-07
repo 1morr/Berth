@@ -242,12 +242,34 @@ def arrange_tmdb(factory: FakeClientFactory) -> None:
 
 
 def arrange_mikan(factory: FakeClientFactory) -> None:
-    """Mikan 的搜尋頁把前一個番組換成 4009，番組頁與單一 feed 是 4009 × 字幕組 370 的錄製頁。"""
-    search = (MIKAN / "home-search.frieren.html").read_text(encoding="utf-8")
-    search = search.replace("/Home/Bangumi/3141", "/Home/Bangumi/4009")
+    """Mikan 上的這部作品（番組 4009，開播日對得上 TMDB 的 2022-01-01）：搜尋頁兩個名字都回它，
+    番組頁兩個字幕組（LoliHouse 12 集、ANi 3 集），單一 feed 是 4009 × 370 的錄製頁。"""
+    search = (
+        b'<a href="/Home/Bangumi/4009"><div class="an-text" '
+        b'title="Cyberpunk: Edgerunners"></div></a>'
+    )
+    page = (
+        '<p class="bangumi-title">Cyberpunk: Edgerunners</p>放送开始：1/1/2022'
+        '<a class="subgroup-name subgroup-370">LoliHouse</a>'
+        '<span class="date">09/24/2026 12:00</span>'
+        '<a class="subgroup-name subgroup-583">ANi</a>'
+        '<span class="date">09/24/2026 12:00</span>'
+        '<div class="subgroup-text" id="370">'
+        + "".join(
+            f'<a class="magnet-link-wrap">[LoliHouse] Cyberpunk - {episode:02d}</a>'
+            for episode in range(1, 13)
+        )
+        + '</div><div class="subgroup-text" id="583">'
+        + "".join(
+            f'<a class="magnet-link-wrap">[ANi] Cyberpunk - {episode:02d}</a>'
+            for episode in range(1, 4)
+        )
+        + "</div>"
+    ).encode()
     pages = factory.rss_.pages
-    pages[search_url("Cyberpunk Edgerunners 2")] = search.encode()
-    pages[bangumi_url(4009)] = (MIKAN / "home-bangumi.4009.html").read_bytes()
+    pages[search_url("Cyberpunk: Edgerunners")] = search
+    pages[search_url("サイバーパンク エッジランナーズ")] = search
+    pages[bangumi_url(4009)] = page
     pages[bangumi_feed_url(4009, 370)] = (MIKAN / "rss-bangumi.4009-370.xml").read_bytes()
 
 
@@ -352,13 +374,9 @@ def scorers_of(anilist_id: int) -> int:
 class TestNewSeasonPicks:
     EDGERUNNERS = 195539
 
-    def subscribe(self, messages: list[ModelMessage]) -> dict[str, Any]:
-        row = {
-            "bangumi_id": last_result(messages, "bangumi_read_bangumi")["id"],
-            "subgroup_id": 370,
-            "media_id": EDGERUNNERS_ID,
-        }
-        return {"rows": [row]}
+    def subscribe(self, _messages: list[ModelMessage]) -> dict[str, Any]:
+        """M5.6 票 09：模型只給作品與推薦的字幕組，番組與來源由伺服器找。"""
+        return {"rows": [{"subgroup": "LoliHouse", "media_id": EDGERUNNERS_ID}]}
 
     @pytest.fixture(autouse=True)
     def model(self, script: Script) -> None:
@@ -369,9 +387,7 @@ class TestNewSeasonPicks:
             say("Here are this season's picks."),
             call("discover_search_media", query="Cyberpunk: Edgerunners 2"),
             call("media_read_media", media_id=EDGERUNNERS_ID),
-            call("bangumi_search_bangumi", term="Cyberpunk Edgerunners 2"),
-            call("bangumi_read_bangumi", bangumi_id=4009),
-            call_with("rss_subscribe_mikan", self.subscribe),
+            call_with("rss_subscribe", self.subscribe),
         ]
 
     def test_the_model_sees_the_season_with_raters_and_the_calendar_with_votes(
@@ -425,21 +441,20 @@ class TestNewSeasonPicks:
         """自由文字出自外部內容的那一格才亮警示（`external_fields`）；id 與使用者說過的不算。"""
 
         def named(messages: list[ModelMessage]) -> dict[str, Any]:
-            [row] = self.subscribe(messages)["rows"]
             title = last_result(messages, "anilist_read_season")["entries"][0]["title_native"]
-            return {"rows": [{**row, "name": title}]}
+            return {"rows": [{"media_id": EDGERUNNERS_ID, "subgroup": title}]}
 
-        script.steps[-1] = call_with("rss_subscribe_mikan", named)
+        script.steps[-1] = call_with("rss_subscribe", named)
         chat(client, "這季有什麼好看的新番？")
 
         # 使用者沒打片名；日文原名只在 AniList 的季表裡（放送表是別的寫法）。
         chat(client, "我要看人氣第一名那部", earlier=[])
 
         [proposal] = cards(client)
-        assert [row["name"] for row in proposal["arguments"]] == [
+        assert [row["subgroup"] for row in proposal["arguments"]] == [
             "サイバーパンク: エッジランナーズ2"
         ]
-        assert proposal["preview"]["external_fields"] == [["name"]]
+        assert proposal["preview"]["external_fields"] == [["subgroup"]]
 
     def test_the_pick_ends_in_a_mikan_subscription_card(
         self, client: TestClient, script: Script, factory: FakeClientFactory
@@ -450,21 +465,20 @@ class TestNewSeasonPicks:
 
         assert response.status_code == 200, response.text
         [proposal] = cards(client)
-        assert proposal["command"] == "rss.subscribe_mikan"
+        assert proposal["command"] == "rss.subscribe"
         assert proposal["status"] == "pending"
         [row] = proposal["arguments"]
-        assert (row["bangumi_id"], row["subgroup_id"], row["media_id"]) == (
-            4009,
-            370,
-            EDGERUNNERS_ID,
-        )
+        assert (row["media_id"], row["subgroup"]) == (EDGERUNNERS_ID, "LoliHouse")
         assert row["route_id"] == route_of(client, "tv")
-        # 預覽：字幕組由人在卡上選（票 26），模型挑的 LoliHouse 只是預選；番組頁上最多的一組 15 集，
-        # 所以按下去最多送 15 個。卡上沒有哪一格自由文字出自外部內容。
+        # 預覽：字幕組由人在卡上選（票 26），模型挑的 LoliHouse 只是預選；番組頁上最多的一組 12 集，
+        # 所以按下去最多送 12 個。卡上沒有哪一格自由文字出自外部內容。
         [ask] = proposal["preview"]["subgroups"]
-        assert (ask["preselected"], ask["required"]) == ("370", True)
-        assert len(ask["options"]) == 11
-        assert proposal["preview"]["torrents"] == [15]
+        assert (ask["preselected"], ask["required"]) == ("mikan:370", True)
+        assert [(option["kind"], option["name"]) for option in ask["options"]] == [
+            ("mikan", "LoliHouse"),
+            ("mikan", "ANi"),
+        ]
+        assert proposal["preview"]["torrents"] == [12]
         assert proposal["preview"]["external_fields"] == [[]]
         # 卡片之前什麼都沒訂：Feed 沒建、qBittorrent 沒收到東西。
         assert client.get("/api/rss/feeds").json() == []
@@ -472,9 +486,7 @@ class TestNewSeasonPicks:
         assert commands_of(client) == [
             ("discover.search_media", "ok"),
             ("media.read_media", "ok"),
-            ("bangumi.search_bangumi", "ok"),
-            ("bangumi.read_bangumi", "ok"),
-            ("rss.subscribe_mikan", "proposed"),
+            ("rss.subscribe", "proposed"),
         ]
         assert recorded(client)[-1].run.stop_reason == "awaiting_confirmation"
 
@@ -621,7 +633,7 @@ class TestWhatAUserSees:
         chat(client, "這季有什麼好看的新番？")
 
         assert set(script.tools[0]) >= self.ANIME_TOOLS
-        assert "rss_subscribe_mikan" not in script.tools[0]
+        assert "rss_subscribe" not in script.tools[0]
         instructions = script.instructions[0]
         # `recommend` 用 `rss.*`（只給管理員）；`download` 的工具一般使用者都有。
         assert "- recommend:" not in instructions

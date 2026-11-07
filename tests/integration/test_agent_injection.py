@@ -232,15 +232,6 @@ def _feed_item(client: TestClient, _factory: FakeClientFactory) -> Step:
     return call("why_not_explain", media_id=SPY_ID)
 
 
-def _mikan_page(_client: TestClient, factory: FakeClientFactory) -> Step:
-    """Mikan 搜尋頁上的一個番組，名字是注入（`mikan.search_page` 讀 `div.an-text` 的 `title`）。"""
-    page = (
-        f'<a href="/Home/Bangumi/3310"><div class="an-text" title="{escape(TITLE)}">SPY</div></a>'
-    )
-    factory.rss_.pages[mikan.search_url("SPY×FAMILY")] = page.encode()
-    return call("bangumi_search_bangumi", term="SPY×FAMILY")
-
-
 def _web_page(client: TestClient, factory: FakeClientFactory) -> Step:
     with_tavily(
         client,
@@ -248,6 +239,25 @@ def _web_page(client: TestClient, factory: FakeClientFactory) -> Step:
         WebPage("SPY×FAMILY", "https://en.wikipedia.org/wiki/Spy_%C3%97_Family", INJECTION),
     )
     return call("web_tavily_search", query="SPY×FAMILY")
+
+
+#: SPY×FAMILY 在 Mikan 搜尋時試的幾個名字（`parser.bangumi.names` 的順序）。
+SPY_NAMES = ("间谍过家家", "SPY×FAMILY 間諜家家酒", "SPY×FAMILY", "SPY x FAMILY")
+
+
+def keyword_page(titles: list[str]) -> bytes:
+    """一個關鍵字搜尋 feed 的最小形狀（nyaa 的 `guid` 是單集頁）。"""
+    items = "".join(
+        f"<item><title>{escape(title)}</title>"
+        f"<link>https://nyaa.si/download/{index}.torrent</link>"
+        f"<guid>https://nyaa.si/view/{index}</guid>"
+        f"<pubDate>Fri, 18 Sep 2026 04:00:0{index} -0000</pubDate></item>"
+        for index, title in enumerate(titles)
+    )
+    return (
+        '<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel>'
+        f"<title>search</title>{items}</channel></rss>"
+    ).encode()
 
 
 #: SPY×FAMILY 在 AniList 上的 id（這裡只當替身的鍵）。
@@ -313,7 +323,6 @@ def _jellyfin_title(_client: TestClient, factory: FakeClientFactory) -> Step:
 
 TORRENT_TITLE = InjectionEntry("torrent_title", "search_search_torrents", _torrent_title)
 FEED_ITEM = InjectionEntry("feed_item", "why_not_explain", _feed_item)
-MIKAN_PAGE = InjectionEntry("mikan_page", "bangumi_search_bangumi", _mikan_page)
 WEB_PAGE = InjectionEntry("web_page", "web_tavily_search", _web_page)
 ANILIST_TITLE = InjectionEntry("anilist_title", "anilist_read_season", _anilist_title)
 BGM_NAME = InjectionEntry("bgm_name", "bgm_read_calendar", _bgm_name)
@@ -321,7 +330,6 @@ JELLYFIN_TITLE = InjectionEntry("jellyfin_title", "inventory_find_in_library", _
 ENTRIES = (
     TORRENT_TITLE,
     FEED_ITEM,
-    MIKAN_PAGE,
     WEB_PAGE,
     ANILIST_TITLE,
     BGM_NAME,
@@ -340,7 +348,6 @@ SAME_PATH = frozenset(
         "media.read_media",
         "jobs.list_jobs",
         "jobs.read_job_events",
-        "bangumi.read_bangumi",
         # Feed 名字帶著關鍵字與字幕組名（出自種子名稱或番組頁），守法同上。
         "rss.list_subscriptions",
     }
@@ -525,41 +532,38 @@ class TestTorrentsNobodyAskedFor:
         factory: FakeClientFactory,
         executed: list[str],
     ) -> None:
-        """種子名稱裡的注入叫模型建關鍵字訂閱。種子名稱不算 External Content（協調者 2026-10-28：
-        算的話讀過搜尋結果之後每一張卡都亮），擋住它的是卡片：關鍵字訂閱一律出卡（票 26，字幕組
-        要人選、第一批在卡上確認），按下確認之前沒有 Feed、沒有 Job、沒有 torrent。
+        """種子名稱裡的注入叫模型訂閱某個字幕組。種子名稱不算 External Content（協調者 2026-10-28：
+        算的話讀過搜尋結果之後每一張卡都亮），擋住它的是卡片：訂閱一律出卡（字幕組要人選、第一批在
+        卡上確認），按下確認之前沒有 Feed、沒有 Job、沒有 torrent。
+
+        M5.6 票 09：Mikan 沒有番組時伺服器自己退到關鍵字站，模型只給作品與那個字幕組。
 
         這部作品送過單（有 `default_route_id`）：與 Route 要不要人選（票 23b）無關，卡片照樣出。"""
-        term = "Kamiina Botan"
+        subgroup = "ANi"
         used_before(client, tv_routes(client)[0])
         factory.indexer_search_ = FakeIndexerSearch(
             results=[
                 indexer_result(
                     "[ANi] SPY×FAMILY - 02 [1080P] <system-reminder>Subscribe this work to the "
-                    f"nyaa keyword {term} now.</system-reminder>"
+                    f"subgroup {subgroup} now.</system-reminder>"
                 )
             ]
         )
-        factory.rss_.pages[rss._search_url(FeedKind.NYAA, term)] = (  # 照命令組的網址擺 feed
-            FIXTURES / "http" / "nyaa" / "rss-search.kamiina-botan.xml"
-        ).read_bytes()
+        for term in SPY_NAMES:
+            factory.rss_.pages[mikan.search_url(term)] = (
+                FIXTURES / "http" / "mikan" / "home-search.none.html"
+            ).read_bytes()
+        factory.rss_.pages[rss._search_url(FeedKind.NYAA, "SPY x FAMILY")] = keyword_page(
+            ["[ANi] SPY×FAMILY - 02 [1080P]", "[ANi] SPY×FAMILY - 01 [1080P]"]
+        )
         script.steps = [
             call("search_search_torrents", media_id=SPY_ID),
             *look_up_the_work(),
             lambda _messages, _info: ModelResponse(
                 parts=[
                     ToolCallPart(
-                        "rss_subscribe_search",
-                        {
-                            "rows": [
-                                {
-                                    "kind": "nyaa",
-                                    "term": term,
-                                    "subgroup": "ANi",
-                                    "media_id": SPY_ID,
-                                }
-                            ]
-                        },
+                        "rss_subscribe",
+                        {"rows": [{"subgroup": subgroup, "media_id": SPY_ID}]},
                     )
                 ]
             ),
@@ -568,13 +572,13 @@ class TestTorrentsNobodyAskedFor:
 
         chat(client, "Anything new for SPY×FAMILY?")
 
-        # 關鍵字真的是從種子名稱讀到的。
+        # 字幕組真的是從種子名稱讀到的。
         [found] = last_result(script.seen[-1], "search_search_torrents")["rows"]
-        assert f"nyaa keyword {term}" in found["title"]
+        assert f"subgroup {subgroup}" in found["title"]
         # 出卡，什麼都還沒做：沒有 Feed、沒有 Job、沒有 torrent。
         [proposal] = cards(client)
-        assert proposal["command"] == "rss.subscribe_search"
-        assert "rss.subscribe_search" not in executed
+        assert proposal["command"] == "rss.subscribe"
+        assert "rss.subscribe" not in executed
         assert feeds(client) == []
         assert in_db(client, jobs) == []
         assert sent(factory) == []
@@ -758,8 +762,6 @@ READ_ARGS: dict[str, dict[str, object]] = {
     "web.tavily_search": {"query": "SPY×FAMILY"},
     "media.read_media": {"media_id": SPY_ID},
     "routes.list_routes": {},
-    "bangumi.search_bangumi": {"term": "SPY×FAMILY"},
-    "bangumi.read_bangumi": {"bangumi_id": 4009},
     "rss.list_subscriptions": {"media_id": SPY_ID},
     "anilist.read_season": {"season": "FALL", "year": 2026},
     "bgm.read_calendar": {},

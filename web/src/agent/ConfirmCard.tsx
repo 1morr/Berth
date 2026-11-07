@@ -353,6 +353,7 @@ function Effects({ proposal }: { proposal: Proposal }) {
 /** 卡片的標題：命令的人話名稱，認不得的照原名。 */
 const COMMAND_TITLES = {
   'downloading.add_manual_download': 'agent.card.commands.downloading_add_manual_download',
+  'rss.subscribe': 'agent.card.commands.rss_subscribe',
   'rss.subscribe_mikan': 'agent.card.commands.rss_subscribe_mikan',
   'rss.subscribe_search': 'agent.card.commands.rss_subscribe_search',
   'rss.add_feed': 'agent.card.commands.rss_add_feed',
@@ -433,10 +434,65 @@ function RowBody({
     )
   }
   if (command === 'rss.delete_feed') return <DeleteFeedRowBody row={row} />
-  if (command === 'rss.subscribe_mikan' || command === 'rss.subscribe_search') {
+  if (command === 'rss.subscribe') {
+    // 票 09 之前存的卡選項沒有 `kind`：那時每一組都是 Mikan 的。
+    const picked = subgroup.ask?.options.find((option) => option.key === subgroup.pick) ?? null
+    const keyword = picked?.kind === 'nyaa' || picked?.kind === 'acgrip'
     return (
       <SubscribeRowBody
-        command={command}
+        look={{
+          siteField: 'source',
+          siteLabel: t('agent.card.fields.source'),
+          site: picked?.kind ? sourceLabel(picked.kind) : t('agent.card.subgroupNone'),
+          term: keyword ? (picked?.term ?? '') : '',
+          name: text(row.subgroup),
+          keyword,
+          pickPrompt: t('agent.card.firstBatchPick'),
+          showKind: true,
+        }}
+        row={row}
+        external={external}
+        torrents={torrents}
+        route={route}
+        subgroup={subgroup}
+        existing={existing}
+        round={round}
+      />
+    )
+  }
+  if (command === 'rss.subscribe_mikan' || command === 'rss.subscribe_search') {
+    const mikan = command === 'rss.subscribe_mikan'
+    // 沒有選項時照助理給的那一個訂（Mikan 是番組頁上的名字，關鍵字是發佈名上的組名）。
+    const named = mikan
+      ? text(row.subgroup_name) === '—'
+        ? `#${String(row.subgroup_id)}`
+        : text(row.subgroup_name)
+      : text(row.subgroup)
+    return (
+      <SubscribeRowBody
+        look={
+          mikan
+            ? {
+                siteField: 'name',
+                siteLabel: t('agent.card.fields.bangumi'),
+                site: text(row.name) === '—' ? `#${String(row.bangumi_id)}` : text(row.name),
+                term: '',
+                name: named,
+                keyword: false,
+                pickPrompt: mikanSends(subgroup.ask, null, torrents),
+                showKind: false,
+              }
+            : {
+                siteField: 'kind',
+                siteLabel: t('agent.card.fields.site'),
+                site: text(row.kind),
+                term: text(row.term),
+                name: named,
+                keyword: true,
+                pickPrompt: t('agent.card.firstBatch', { count: 0 }),
+                showKind: false,
+              }
+        }
         row={row}
         external={external}
         torrents={torrents}
@@ -742,8 +798,12 @@ function FeedRowBody({ row, external }: { row: Row; external: readonly string[] 
   )
 }
 
+/**
+ * 一列訂閱（M5 票 26、M5.6 票 09）：來源那一格、字幕組、作品、Route 與送出量；關鍵字那一條另有
+ * 搜尋詞、第一批與第一輪。兩種來源的卡片共用這一份畫法，差別只在呼叫端算出來的 `look`。
+ */
 function SubscribeRowBody({
-  command,
+  look,
   row,
   external,
   torrents,
@@ -752,12 +812,25 @@ function SubscribeRowBody({
   existing,
   round,
 }: {
-  command: 'rss.subscribe_mikan' | 'rss.subscribe_search'
+  /** 這一列怎麼訂：來源那一格的欄位名、標籤與值，搜尋詞，字幕組名，是不是關鍵字那一條。 */
+  look: {
+    siteField: string
+    siteLabel: string
+    site: ReactNode
+    term: string
+    name: string
+    keyword: boolean
+    /** 有選項、還沒選時「送出」那一格寫什麼（每種卡本來就寫得不一樣）。 */
+    pickPrompt: string
+    /** 選項上標不標來源（只有以作品訂閱的卡有兩條路）。 */
+    showKind: boolean
+  }
   row: Row
   external: readonly string[]
   torrents: number | null | undefined
   route: RouteSlot
   subgroup: SubgroupSlot
+  /** 這部作品提出時已經有的訂閱（票 26）。 */
   existing: readonly SubscriptionRef[]
   round: RoundSlot
 }) {
@@ -765,39 +838,42 @@ function SubscribeRowBody({
   const mediaId = mediaIdOf(row) ?? ''
   const media = useQuery({ ...mediaQueryOptions(mediaId), enabled: mediaId !== '' })
   const given = media.data?.routes.find((choice) => choice.id === row.route_id)
-  const mikan = command === 'rss.subscribe_mikan'
   const { ask } = subgroup
   const picked = ask?.options.find((option) => option.key === subgroup.pick) ?? null
-  // 沒有選項（番組頁或搜尋上沒有字幕組）：照助理給的那一個訂。
-  const named = mikan
-    ? text(row.subgroup_name) === '—'
-      ? `#${String(row.subgroup_id)}`
-      : text(row.subgroup_name)
-    : text(row.subgroup)
   const choosing = ask !== null && subgroup.editable && (ask.required || ask.options.length > 1)
-  const source: Field[] = mikan
-    ? [
-        {
-          // 番組名是模型給的自由文字（`name`），出自外部內容的話標在這一格。
-          name: 'name',
-          label: t('agent.card.fields.bangumi'),
-          value: text(row.name) === '—' ? `#${String(row.bangumi_id)}` : text(row.name),
-        },
-      ]
-    : [
-        { name: 'kind', label: t('agent.card.fields.site'), value: text(row.kind) },
-        { name: 'term', label: t('agent.card.fields.term'), value: text(row.term), mono: true },
-      ]
+  // 沒有選項（番組頁或搜尋上沒有字幕組）：照助理給的那一個訂。
+  const sends =
+    picked === null
+      ? ask === null
+        ? look.keyword
+          ? t('agent.card.firstBatch', { count: 0 })
+          : mikanSends(ask, null, torrents)
+        : look.pickPrompt
+      : look.keyword
+        ? round.pick === 'later'
+          ? t('agent.card.firstBatchLater')
+          : t('agent.card.firstBatch', { count: picked.titles.length })
+        : mikanSends(ask, picked, torrents)
   return (
     <div className="grid gap-2">
       <Fields
         external={external}
         fields={[
-          ...source,
+          { name: look.siteField, label: look.siteLabel, value: look.site },
+          ...(look.term
+            ? [
+                {
+                  name: 'term',
+                  label: t('agent.card.fields.term'),
+                  value: look.term,
+                  mono: true,
+                },
+              ]
+            : []),
           {
-            name: mikan ? 'subgroup_name' : 'subgroup',
+            name: 'subgroup',
             label: t('agent.card.fields.subgroup'),
-            value: ask === null ? named : (picked?.name ?? t('agent.card.subgroupNone')),
+            value: ask === null ? look.name : (picked?.name ?? t('agent.card.subgroupNone')),
           },
           {
             name: 'media_id',
@@ -809,15 +885,7 @@ function SubscribeRowBody({
             label: t('agent.card.fields.route'),
             value: <RouteName route={route} fallback={given?.name ?? `#${String(row.route_id)}`} />,
           },
-          {
-            name: 'sends',
-            label: t('agent.card.fields.sends'),
-            value: mikan
-              ? mikanSends(ask, picked, torrents)
-              : round.pick === 'later'
-                ? t('agent.card.firstBatchLater')
-                : t('agent.card.firstBatch', { count: picked?.titles.length ?? 0 }),
-          },
+          { name: 'sends', label: t('agent.card.fields.sends'), value: sends },
         ]}
       />
       {choosing ? (
@@ -827,20 +895,35 @@ function SubscribeRowBody({
           keyOf={(option) => option.key}
           picked={picked}
           onPick={(option) => subgroup.onPick(option.key)}
-          render={(option) => <SubgroupLine group={option} />}
+          render={(option) => (
+            <SubgroupLine
+              group={option}
+              source={look.showKind ? sourceLabel(option.kind) : undefined}
+            />
+          )}
         />
       ) : null}
-      {mikan ? null : (
+      {look.keyword ? (
         <FirstBatch option={picked} missing={ask === null} later={round.pick === 'later'} />
-      )}
-      {mikan || !round.offered ? null : round.editable ? (
-        <FirstRoundChoice value={round.pick} onChange={round.onPick} />
-      ) : (
-        <p className="text-xs text-ink">{t(`rss.subscribe.round.${round.pick}`)}</p>
-      )}
+      ) : null}
+      {look.keyword && round.offered ? (
+        round.editable ? (
+          <FirstRoundChoice value={round.pick} onChange={round.onPick} />
+        ) : (
+          <p className="text-xs text-ink">{t(`rss.subscribe.round.${round.pick}`)}</p>
+        )
+      ) : null}
       <Existing found={existing} />
     </div>
   )
+}
+
+/** 來源的名字（M5.6 票 09）：站名走 i18n，與 RSS 頁那幾顆同一個字。 */
+function sourceLabel(kind: SubgroupOption['kind']): string {
+  if (kind === 'mikan' || kind === 'nyaa' || kind === 'acgrip') {
+    return i18n.t(`rss.kind.${kind}`)
+  }
+  return ''
 }
 
 /** 訂閱 Mikan 按下去就當場送整季，不經第一批確認（協調者 2026-10-27）：按的人要知道送多少。 */

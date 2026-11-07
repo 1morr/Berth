@@ -11,14 +11,19 @@
 - **助理以作品訂閱 Mikan**：多一支 `rss.subscribe`，助理只給作品與推薦的字幕組。Berth 用作品的中文
   （含簡體）、原名、羅馬拼音與英文名搜 Mikan、用開播日挑番組（同名不同年由開播日分開），番組頁上的
   字幕組再由人在卡片上選；核准之後建的 Feed、RSS Series 與補到的整季和原本的 Mikan 訂閱完全一樣。
-  找不到番組、或番組上一個字幕組都沒有時提出就被拒絕、理由交給助理。`subscribe` skill 改走這一條，
-  原本的四支工具這一版還留著（下一張票拿掉）。
+  Mikan 沒有番組、或番組上沒有助理說的那個字幕組時，Berth 自己再問 nyaa 與 acg.rip 的關鍵字搜尋，
+  卡片列出兩條路找到的字幕組與各自的來源（Mikan／Nyaa／ACG.RIP）由人選一個；訂關鍵字那一條時送出
+  第一批、可以只追之後的。三個站都沒有字幕組時提出就被拒絕（新的拒絕理由 `subgroups_not_found`）。
+  `subscribe` skill 改走這一條，縮到 20 行。
 - **助理查媒體庫時看得到集數**：`find_in_library` 命中劇集時多帶 Jellyfin 自己的季集範圍（季號與集號，
   例如第 1 季 `1-5, 7-12`），Jellyfin 沒刮到 TMDB id 的作品也答得出使用者有哪幾集；電影不帶這一格。
   某一部讀不到集數時只那一部說原因，其他結果照回。
 
 ### Changed
 
+- **助理的訂閱只剩一支工具**：給模型的工具從 22 支減到 18 支——訂閱一律走 `rss.subscribe`（伺服器自己
+  找 Mikan 的番組，找不到再問關鍵字站），拿掉 `bangumi.search_bangumi`、`bangumi.read_bangumi`、
+  `rss.subscribe_mikan`、`rss.subscribe_search`。這四支命令與它們的 REST 端點留著，RSS 頁與作品頁照舊在用。
 - **Route 由 Berth 在提出下載或訂閱時自己決定**：助理不再先查有哪些 Route 再挑一條——工具清單拿掉
   `media.route_choices`，`read_media` 給模型的那一份也沒有 Route 欄位，skills 不再寫 Route。作品放得進的
   Route 只有一條時直接用那一條、卡片只印名字；不只一條時照舊在卡片上由人選（預選上次用的那一條）；

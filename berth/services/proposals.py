@@ -142,9 +142,14 @@ class SubgroupOption:
     #: `releases`）。
     titles: tuple[str, ...]
     #: 選了這一個時蓋過存下參數的那幾格（Mikan：`subgroup_id` 與 `subgroup_name`；以作品訂閱
-    #: `rss.subscribe`：`subgroup`；關鍵字：`subgroup`）。
+    #: `rss.subscribe`：`source`、`term` 與 `subgroup`；關鍵字：`subgroup`）。
     # `Any`：格子的型別隨命令（字幕組 id 是 int、名字是 str）。
     arguments: dict[str, Any]
+    #: 這一個是在哪一個站找到的（M5.6 票 09，`FeedKind`）：以作品訂閱的卡上兩條路都有，卡片照它
+    #: 標來源。只有 `rss.subscribe` 的選項有；票 09 之前存的卡沒有這一格。
+    kind: FeedKind | None = None
+    #: 關鍵字站的搜尋詞；Mikan 是空字串。票 09 之前存的卡沒有這一格。
+    term: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -929,6 +934,8 @@ def _subgroup_ask(ask: dict[str, Any] | None) -> SubgroupAsk | None:
                 latest=option["latest"],
                 titles=tuple(option["titles"]),
                 arguments=option["arguments"],
+                kind=FeedKind(option["kind"]) if option.get("kind") else None,
+                term=option.get("term", ""),
             )
             for option in ask["options"]
         ),

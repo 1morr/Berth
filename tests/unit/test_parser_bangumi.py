@@ -70,6 +70,19 @@ class TestNames:
 
         assert found.count("與妳相戀到生命盡頭") == 1
 
+    def test_latin_names_can_go_first(self) -> None:
+        """M5.6 票 09：關鍵字站退回時 nyaa 先試原文與英文（發佈名多半是那兩種寫法）。"""
+        found = names(
+            work(titles=("Kimi ga Shinu made Koi wo Shitai", "与你相恋到生命尽头")),
+            latin_first=True,
+        )
+
+        assert found[0] == "Kimi ga Shinu made Koi wo Shitai"
+        assert set(found) == set(names(work(titles=("与你相恋到生命尽头",)))) | {
+            "君が死ぬまで恋をしたい",
+            "Kimi ga Shinu made Koi wo Shitai",
+        }
+
 
 class TestSameWork:
     @pytest.mark.parametrize(

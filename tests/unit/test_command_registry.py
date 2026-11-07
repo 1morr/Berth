@@ -320,11 +320,19 @@ class TestAnnotatedLimits:
         assert found["fake.look"].injected == ("session", "actor")
         assert set(found["fake.look"].input.model_fields) == {"route_id"}
 
-    def test_a_work_subscription_only_asks_for_the_work_and_a_subgroup(self) -> None:
-        """`rss.subscribe`（M5.6 票 08）：番組由伺服器找，模型只給作品、推薦的字幕組與 Route。"""
+    def test_a_work_subscription_asks_for_the_work_and_a_subgroup(self) -> None:
+        """`rss.subscribe`（M5.6 票 08、09）：番組與關鍵字站由伺服器找，命令的輸入只有作品、
+        推薦的字幕組與 Route（`kind`、`term`、`first_batch` 是卡片上的選項帶回來的，模型不給）。"""
         model = registry.commands()["rss.subscribe"].input
 
-        assert set(model.model_fields) == {"media_id", "subgroup", "route_id"}
+        assert set(model.model_fields) == {
+            "media_id",
+            "subgroup",
+            "route_id",
+            "kind",
+            "term",
+            "first_batch",
+        }
         parsed = model.model_validate({"media_id": "tv:1", "subgroup": "ANi", "route_id": 1})
         assert parsed.subgroup == "ANi"  # type: ignore[attr-defined]  # 動態推出的 model
         for blank in ("", "  "):

@@ -43,12 +43,13 @@ class BangumiCandidate:
     premiere: date | None
 
 
-def names(snapshot: MediaSnapshot) -> tuple[str, ...]:
-    """拿去搜 Mikan 的名字，簡體中文優先（番組名多半是它），同一個名字只留一次。
+def names(snapshot: MediaSnapshot, *, latin_first: bool = False) -> tuple[str, ...]:
+    """拿去搜站上的名字，簡體中文優先（番組名多半是它），同一個名字只留一次。
 
     比對的是拆掉季名之後的形式：`與妳相戀到生命盡頭 第二季` 與本名是同一次搜尋。CJK 的名字排在
     英文前面：Mikan 的番組名是中文或日文，每次搜尋都要真的打一次站上的搜尋頁（約 1.5 秒），先搜
-    命中率高的那幾個。
+    命中率高的那幾個。`latin_first` 把拉丁字的名字排到前面（M5.6 票 09：nyaa 的發佈名多半是原文
+    或英文，關鍵字站的搜尋詞從這裡取）。
     """
     everywhere = [snapshot.title, snapshot.title_original, *snapshot.titles]
     wanted = [
@@ -63,7 +64,12 @@ def names(snapshot: MediaSnapshot) -> tuple[str, ...]:
         key = normalize_title(bare)
         if key and key not in seen:
             seen[key] = bare
-    return tuple(seen.values())
+    found = tuple(seen.values())
+    if not latin_first:
+        return found
+    return tuple(name for name in found if not _cjk.search(name)) + tuple(
+        name for name in found if _cjk.search(name)
+    )
 
 
 def same_work(snapshot: MediaSnapshot, title: str) -> bool:

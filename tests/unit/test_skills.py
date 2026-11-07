@@ -48,7 +48,7 @@ SKILL_LINE_LIMIT = 80
 NAMED_WORKS = ("re:zero", "mushoku", "無職", "hunter", "宝石", "非人少女")
 
 #: 票上的兩個逐檔上限（M5.6 票 07 驗收），算檔案行數。
-FILE_LIMITS = {"download": 30, "recommend": 20}
+FILE_LIMITS = {"download": 30, "recommend": 20, "subscribe": 20}
 
 
 def skill_lines(skill: Skill, root: Path = SKILLS_ROOT) -> int:
@@ -252,12 +252,12 @@ class TestTheSkillsInTheRepo:
 
 
 class TestTheBudget:
-    """三份的總行數與兩個逐檔上限（M5.6 票 07）：多寫會紅，只改格式不會。"""
+    """三份的總行數與逐檔上限（M5.6 票 07、09）：多寫會紅，只改格式不會。"""
 
     def test_the_repo_skills_fit(self) -> None:
         assert over_budget(catalog()) == []
 
-    def test_the_two_limits_from_the_ticket(self) -> None:
+    def test_the_limits_from_the_tickets(self) -> None:
         for skill in catalog():
             limit = FILE_LIMITS.get(skill.name)
             if limit is not None:

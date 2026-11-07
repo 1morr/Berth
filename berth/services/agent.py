@@ -106,7 +106,6 @@ from berth.domain import (
 )
 from berth.models import AiConversation, AiRun, AiSettings, AiToolCall, User
 from berth.models.types import utcnow
-from berth.parser.binding import of_group
 from berth.services import proposals
 from berth.services.agent_books import call_row, elapsed_ms, plus
 from berth.services.agent_guards import Progress, ProviderBreaker, clip
@@ -118,13 +117,6 @@ from berth.services.agent_tools import (
     TAVILY_TOOL,
     tool_name,
     visible_tools,
-)
-from berth.services.bangumi import (
-    BangumiView,
-    SubgroupView,
-    match_bangumi,
-    read_bangumi,
-    subgroup_named,
 )
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
@@ -147,9 +139,11 @@ from berth.services.proposals import (
 from berth.services.registry import CommandSpec, commands
 from berth.services.rss import (
     RssRejectedError,
+    SubscriptionOffer,
     SubscriptionRef,
     list_subscriptions,
-    search_subgroups,
+    offer_named,
+    subscription_offers,
     subscriptions_of_feed_url,
 )
 from berth.services.search import HeldEpisode, estimate, held_in_release
@@ -567,21 +561,20 @@ def _bind_submit(turn: Turn, row: BaseModel) -> dict[str, object]:
     return {"source": source, "media_id": row.media_id}
 
 
-class SearchSubscriptionRow(BaseModel):
-    """關鍵字訂閱卡的一列，模型給的那一份（票 26）：字幕組一定要說，卡上讓人照這一次搜到的改選。"""
+class WorkSubscriptionRow(BaseModel):
+    """以作品訂閱的一列，模型給的那一份（M5.6 票 08）：站與搜尋詞由伺服器找（票 09），模型不必
+    知道，所以只有作品與推薦的字幕組。卡上讓人改選的來源、搜尋詞與字幕組存在選項的參數裡。"""
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: FeedKind = Field(description="nyaa or acgrip.")
-    term: str = Field(min_length=1, description="The keyword the feed searches for.")
+    media_id: str = Field(description="The work's id, as search results give it (e.g. tv:65942).")
     subgroup: str = Field(
         min_length=1,
         description=(
-            "The subgroup you recommend, as written in its release names (e.g. ANi). The "
-            "user picks the subgroup on the card; only that one is subscribed."
+            "The subgroup you recommend, as written in its release names or on the bangumi "
+            "page. The user picks the subgroup and its source on the card."
         ),
     )
-    media_id: str = Field(description="The work's id, as search results give it (e.g. tv:65942).")
 
 
 @dataclass(frozen=True, slots=True)
@@ -620,80 +613,54 @@ async def _submit_preview(
     return _RowPreview(torrents=1, held=held_in_release(guess, view.seasons))
 
 
-async def _mikan_preview(
-    turn: Turn, session: AsyncSession, row: Mapping[str, object]
-) -> _RowPreview:
-    """訂閱 Mikan 的一列（票 26）：番組頁上的字幕組都是選項（已經綁在作品上的除外：訂了也是
-    `series_bound`），模型給的只當預選。送出的筆數照番組頁的發佈表（與單一 feed 同數），人可以改選，
-    所以是選項裡最多的那一個——數量閘看的是上限。讀不到番組頁就不出卡。"""
-    bangumi, subgroup = row["bangumi_id"], row["subgroup_id"]
-    assert isinstance(bangumi, int)
-    try:
-        page = await read_bangumi(session, turn.executor.factory, bangumi)
-    except RssRejectedError as exc:
-        raise CommandRefusedError("rss.subscribe_mikan", exc.reason, exc.detail) from exc
-    options = _bangumi_options(
-        page, lambda group: {"subgroup_id": group.id, "subgroup_name": group.name}
-    )
-    picked = str(subgroup) if any(option.key == str(subgroup) for option in options) else None
-    return _RowPreview(
-        torrents=max((option.releases for option in options), default=None),
-        subgroups=_ask(options, picked),
-        existing=await list_subscriptions(session, str(row["media_id"])),
-    )
-
-
-async def _search_preview(
-    turn: Turn, session: AsyncSession, row: Mapping[str, object]
-) -> _RowPreview:
-    """關鍵字訂閱的一列（票 26）：這一次搜到的字幕組都是選項，各帶第一批的發佈名。讀不到就不出卡：
-    列不出第一批，人無從確認。"""
-    kind, term = FeedKind(str(row["kind"])), str(row["term"])
-    try:
-        found = await search_subgroups(turn.executor.factory, kind=kind, term=term)
-    except RssRejectedError as exc:
-        raise CommandRefusedError("rss.subscribe_search", exc.reason, exc.detail) from exc
-    options = tuple(
-        SubgroupOption(
-            key=group.name,
-            name=group.name,
-            releases=group.releases,
-            updated=group.updated,
-            latest=group.latest,
-            titles=group.titles,
-            arguments={"subgroup": group.name},
-        )
-        for group in found
-    )
-    wanted = str(row["subgroup"])
-    picked = next((o.key for o in options if of_group(o.latest, wanted)), None)
-    return _RowPreview(
-        torrents=max((option.releases for option in options), default=0),
-        subgroups=_ask(options, picked),
-        existing=await list_subscriptions(session, str(row["media_id"])),
-    )
-
-
 async def _subscribe_preview(
     turn: Turn, session: AsyncSession, row: Mapping[str, object]
 ) -> _RowPreview:
-    """以作品訂閱 Mikan 的一列（M5.6 票 08）：伺服器自己找番組（`match_bangumi`），番組頁上的
-    字幕組都是選項（已經綁在作品上的除外），模型推薦的名字只當預選。找不到番組、番組上沒有
-    字幕組都不出卡：理由交給模型，票 09 再由它退回關鍵字來源。送出的筆數與 `_mikan_preview`
-    同一個算法（選項裡最多的那一個）。"""
+    """以作品訂閱的一列（M5.6 票 08、09）：伺服器自己找番組（`match_bangumi`），番組上沒有模型
+    推薦的那個字幕組（或根本沒有番組）時再問 nyaa 與 acg.rip（`subscription_offers`）。兩條路找到
+    的字幕組都是選項，各帶來源（已經綁在作品上的 Mikan 字幕組除外），模型推薦的名字只當預選。
+    都找不到、讀不到就不出卡：理由交給模型。送出的筆數照選項裡最多的那一個（Mikan 是整季、
+    關鍵字是第一批，都是 `releases`）。"""
     media_id = str(row["media_id"])
     try:
-        found = await match_bangumi(session, turn.executor.factory, media_id)
+        offers = await subscription_offers(
+            session, turn.executor.factory, media_id, str(row["subgroup"])
+        )
     except RssRejectedError as exc:
         raise CommandRefusedError("rss.subscribe", exc.reason, exc.detail) from exc
-    options = _bangumi_options(found, lambda group: {"subgroup": group.name})
-    wanted = subgroup_named(found, str(row["subgroup"]))
-    picked = str(wanted.id) if wanted is not None and wanted.bound_to is None else None
+    shown = tuple(offer for offer in offers.offers if offer.bound_to is None)
+    options = tuple(_offer_option(offer) for offer in shown)
+    wanted = offer_named(offers, str(row["subgroup"]))
+    picked = _offer_key(wanted) if wanted is not None and wanted.bound_to is None else None
     return _RowPreview(
         torrents=max((option.releases for option in options), default=None),
         subgroups=_ask(options, picked),
         existing=await list_subscriptions(session, media_id),
     )
+
+
+def _offer_option(offer: SubscriptionOffer) -> SubgroupOption:
+    """找到的一個字幕組 → 卡片的選項（M5.6 票 09）：來源不同，選了它蓋掉的參數就不同。"""
+    arguments: dict[str, object] = {"kind": offer.kind.value, "subgroup": offer.name}
+    if offer.kind is not FeedKind.MIKAN:
+        arguments["term"] = offer.term
+    return SubgroupOption(
+        key=_offer_key(offer),
+        name=offer.name,
+        releases=offer.releases,
+        updated=offer.updated,
+        latest=offer.latest,
+        titles=offer.titles,
+        arguments=arguments,
+        kind=offer.kind,
+        term=offer.term,
+    )
+
+
+def _offer_key(offer: SubscriptionOffer) -> str:
+    """選項的身分：同一個字幕組可能在兩個站都有，所以帶上來源（M5.6 票 09）。"""
+    identity = offer.subgroup_id if offer.subgroup_id is not None else offer.name
+    return f"{offer.kind.value}:{identity}"
 
 
 async def _feed_preview(
@@ -702,28 +669,6 @@ async def _feed_preview(
     """加 Feed 的一列（票 26）：網址是某個 Mikan 番組的單一 feed、而那個番組已經綁在作品上時，
     說出那部作品已經有的訂閱。其他網址看不出是哪一部。"""
     return _RowPreview(existing=await subscriptions_of_feed_url(session, str(row["url"])))
-
-
-def _bangumi_options(
-    view: BangumiView, arguments: Callable[[SubgroupView], dict[str, object]]
-) -> tuple[SubgroupOption, ...]:
-    """番組頁上的字幕組 → 卡片的選項（已經綁在作品上的除外：訂了也是 `series_bound`）。
-
-    Mikan 的兩支訂閱共用；人選了它要蓋掉存下參數的那幾格由呼叫端給。
-    """
-    return tuple(
-        SubgroupOption(
-            key=str(group.id),
-            name=group.name,
-            releases=group.releases,
-            updated=group.updated,
-            latest=group.latest,
-            titles=(),
-            arguments=arguments(group),
-        )
-        for group in view.subgroups
-        if group.bound_to is None
-    )
 
 
 def _ask(options: tuple[SubgroupOption, ...], picked: str | None) -> SubgroupAsk | None:
@@ -738,9 +683,7 @@ def _ask(options: tuple[SubgroupOption, ...], picked: str | None) -> SubgroupAsk
 #: 卡片命令逐列的預覽（按卡的人要知道送多少、選哪個字幕組、作品已經有哪些訂閱）。沒列的什麼都不算。
 _PREVIEWS: dict[str, _Previewer] = {
     "downloading.add_manual_download": _submit_preview,
-    "rss.subscribe_mikan": _mikan_preview,
     "rss.subscribe": _subscribe_preview,
-    "rss.subscribe_search": _search_preview,
     "rss.add_feed": _feed_preview,
 }
 
@@ -748,9 +691,8 @@ _PREVIEWS: dict[str, _Previewer] = {
 #: 輸入要先換過才交給命令的卡片命令。沒列的，模型給的一列就是命令輸入。
 _CARD_INPUTS: dict[str, CardInput] = {
     "downloading.add_manual_download": CardInput(SubmitRow, _bind_submit),
-    "rss.subscribe_search": CardInput(
-        SearchSubscriptionRow, lambda _turn, row: row.model_dump(mode="json")
-    ),
+    # 來源與搜尋詞是伺服器找的（M5.6 票 09）：模型只給作品與推薦的字幕組。
+    "rss.subscribe": CardInput(WorkSubscriptionRow, lambda _turn, row: row.model_dump(mode="json")),
 }
 
 
@@ -810,6 +752,7 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
     chosen = view.routes or [None] * shown
     groups = _subgroups_chosen(view)
     rounds = view.first_batch or [None] * shown
+    rounds_said = _first_batch_rows(view)
     existing = view.preview.existing
     held = view.preview.held_back
     later = (
@@ -840,7 +783,7 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
                 # 人在卡片上選的第一輪（票 26）：`later` 是現有的一筆都沒送。
                 **(
                     {"first_batch_chosen_on_card": rounds[index]}
-                    if rounds[index] is not None
+                    if rounds[index] is not None and rounds_said[index]
                     else {}
                 ),
                 # 提出時這部作品已經有的訂閱（票 26）：還留著的話要不要刪由使用者決定。
@@ -854,6 +797,29 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
         ],
         **later,
     }
+
+
+def _first_batch_rows(view: ProposalView) -> list[bool]:
+    """逐列：卡片上真的畫得出第一輪的（M5.6 票 09）。
+
+    `rss.subscribe` 的輸入有 `first_batch`，所以預覽裡每一列都「可選」；卡片只替選了關鍵字那一條的
+    列畫那個選擇（Mikan 一律整季），所以也只有那幾列能說「人在卡上選了第一輪」。票 09 之前的兩支
+    訂閱命令各自只有一條路，照舊回報（`subscribe_mikan` 的輸入沒有這一格，`rounds` 本來就是空的）。
+    """
+    if view.command != "rss.subscribe":
+        return [True] * len(view.arguments)
+    picks = view.subgroups or [None] * len(view.arguments)
+    asks = view.preview.subgroups
+    said: list[bool] = []
+    for index, pick in enumerate(picks):
+        ask = asks[index] if index < len(asks) else None
+        option = (
+            next((one for one in ask.options if one.key == pick), None)
+            if ask is not None and pick is not None
+            else None
+        )
+        said.append(option is not None and option.kind is not FeedKind.MIKAN)
+    return said
 
 
 def _subgroups_chosen(view: ProposalView) -> list[str | None]:

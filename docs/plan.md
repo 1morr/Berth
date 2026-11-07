@@ -1136,6 +1136,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - `POST /rss/subscriptions/search`：`{media, route, kind: nyaa | acgrip, term, subgroup, first_batch}`。`subgroup` 必填，只收那一組。`first_batch`（`all` 預設 / `later`）建好當場走 `rss.prime_feed` 選第一輪：`all` 送出第一批、綁上的 Series 記成第一批已確認，`later` 現有的記成略過。
   - 讀不到搜尋是 502 `feed_unreachable`、什麼都不建；201 回 Feed。當場讀一輪，讀不到仍是 201、原文在 `poll_error`，之後的輪詢照送。
   - 422 `feed_unsupported`（`kind = mikan`）；409 `feed_duplicate`。
+- 助手只有 `rss.subscribe`（沒有 HTTP 端點，M5.6 票 08、09）：以作品訂閱，Mikan 沒有那個字幕組時伺服器自己退到 nyaa／acg.rip 的關鍵字搜尋。上面兩支照舊給作品頁與 RSS 頁，不是給模型的工具（工具清單見〈agent〉）。讀得到而兩個關鍵字站都沒有字幕組時是 422 `subgroups_not_found`；只有卡片之外的路徑（人提出的、MCP）走得到。
 
 #### issues
 
@@ -1232,8 +1233,9 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - **agent runtime**（`services/agent.py`）：一則使用者訊息是一輪（`Turn`，也是 pydantic-ai 的 deps）。
   - **工具**是 `TOOLS`（`services/agent_tools.py`，與 skills 共用）裡的登錄表命令，看得到哪幾個照命令的 `audience`，呼叫一律經執行器、actor 是 `ai:<user id>`，每次工具呼叫一個 session。
     - 完整清單是 `TOOLS` 與 `ANIME_TOOLS`（`agent_tools.py`）；`web.tavily_search` 只在設了 Tavily key 時給。
-    - 讀取類：`discover.search_media`、`discover.read_trending`、`why_not.explain`（說明寫出各結論的意思，M5.6 票 07）、`jobs.list_jobs`、`jobs.read_job_events`、`web.tavily_search`、`skills.load_skill`、`search.search_torrents`、`media.read_media`（`audience=user`；給模型的那一份沒有 `routes` 與 `default_route_id`，M5.6 票 04；整季以上都在 Jellyfin 時帶 `hint`，M5.6 票 07）、`routes.list_routes`、`bangumi.search_bangumi`、`bangumi.read_bangumi`、`ANIME_TOOLS`（動漫資料來源，§8.10）、`inventory.find_in_library`（用名字在這個人看得到的每一個媒體庫找，結果帶 `in_ledger`；劇集另有 `episodes`：Jellyfin 自己的季集號，依季收成範圍，不是 TMDB 的）、`rss.list_subscriptions`（不帶作品時列每一條訂閱）。
-    - 寫入類（都出確認卡，見 §7〈確認卡〉與〈守法〉）：`downloading.add_manual_download`（送單）、`rss.subscribe`（以作品訂閱：番組由伺服器找、用開播日挑，M5.6 票 08）、`rss.subscribe_mikan`、`rss.subscribe_search`、`rss.add_feed`、`rss.delete_feed`。
+    - 讀取類：`discover.search_media`、`discover.read_trending`、`why_not.explain`（說明寫出各結論的意思，M5.6 票 07）、`jobs.list_jobs`、`jobs.read_job_events`、`web.tavily_search`、`skills.load_skill`、`search.search_torrents`、`media.read_media`（`audience=user`；給模型的那一份沒有 `routes` 與 `default_route_id`，M5.6 票 04；整季以上都在 Jellyfin 時帶 `hint`，M5.6 票 07）、`routes.list_routes`、`ANIME_TOOLS`（動漫資料來源，§8.10）、`inventory.find_in_library`（用名字在這個人看得到的每一個媒體庫找，結果帶 `in_ledger`；劇集另有 `episodes`：Jellyfin 自己的季集號，依季收成範圍，不是 TMDB 的）、`rss.list_subscriptions`（不帶作品時列每一條訂閱）。
+    - 寫入類（都出確認卡，見 §7〈確認卡〉與〈守法〉）：`downloading.add_manual_download`（送單）、`rss.subscribe`（以作品訂閱：番組由伺服器找、用開播日挑；Mikan 沒有那個字幕組時伺服器自己退到 nyaa／acg.rip 的關鍵字搜尋，M5.6 票 08、09）、`rss.add_feed`、`rss.delete_feed`。
+    - 訂閱只有 `rss.subscribe` 一支工具（M5.6 票 09，22 → 18 支）：`bangumi.search_bangumi`、`bangumi.read_bangumi`、`rss.subscribe_mikan`、`rss.subscribe_search` 的命令留著（RSS 頁與作品頁在用），但不給模型。
     - `routes.check_route(s)` 不給：探測會觸發使用者設的「完成時執行外部程式」。
   - **記帳與防護**是一個 capability（`_Guard`）：`wrap_model_request` 先看次數、做完當場寫 `ai_calls` 與 `ai_runs` 再看 token；`wrap_tool_execute` 管同工具同參數（命令拒絕、參數錯、命令出錯、結果帶 `problem` 的都不計）；`on_run_error` 補記串流時出錯的那次呼叫（串流時 `wrap_model_request` 只收到 `CancelledError`，brief §20.24）。
   - 停下來時（防護、出錯、按了停止、Berth 重新啟動）歷史存到最後一次模型呼叫之前那一段，後面接一則說明（哪一條、做到哪；`model_name` 是 `berth`），串流裡的 `error` 換成同一段字。token 超過上限時，那一則若還有要叫的工具就停、工具不跑；答完的那一則（已經整段串流出去）照樣留著。
@@ -1371,9 +1373,10 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 
 **訂閱的字幕組由人選**
 
-- 提出時逐列算預覽（`agent._PREVIEWS`）：Mikan 讀番組頁（`bangumi.read_bangumi`，已綁在作品上的字幕組除外）；以作品訂閱（`rss.subscribe`）先用作品的名字搜 Mikan、用開播日挑番組（`services.bangumi.match_bangumi`，規則在 `parser.bangumi`），找不到番組或番組上沒有字幕組都不出卡（M5.6 票 08）；關鍵字訂閱讀那一次搜尋（`rss.search_subgroups`，字幕組各帶第一批的發佈名；模型的那一列一定要給 `subgroup`）。讀不到就不出卡（`feed_unreachable`）。
-- 模型給的在選項裡才預選；選項不只一個或模型給的不在裡面時 `required`，卡片那一列是一排字幕組鍵、沒選不畫確認鍵。卡片結果多 `subgroup_chosen_on_card`。
-- 關鍵字訂閱帶 `downloads`：給了字幕組就當場送第一批。
+- 提出時逐列算預覽（`agent._PREVIEWS`）：訂閱只有以作品訂閱一條路（`rss.subscribe`，M5.6 票 09）。伺服器先用作品的名字搜 Mikan、用開播日挑番組（`services.bangumi.match_bangumi`，規則在 `parser.bangumi`）；Mikan 沒有番組、或番組上沒有模型給的那個字幕組時，再讀 nyaa 與 acg.rip 的那一次搜尋（`rss.subscription_offers`，兩個站各先用最可能命中的前兩個名字：acg.rip 中文優先、nyaa 原文與英文優先）。**讀不到 Mikan 不退回關鍵字**：分不出「站上沒有」與「暫時讀不到」，理由照 `feed_unreachable` 交給模型。兩個關鍵字站都讀不到才是 `feed_unreachable`；讀得到而一個字幕組都沒有是 `subgroups_not_found`。
+- 兩條路找到的字幕組一起列，各帶來源（Mikan／nyaa／acg.rip）：Mikan 的照番組頁順序在前，再 nyaa、再 acg.rip（各站照筆數多的在前）。同一個字幕組兩條路都有時兩個都列（訂起來是兩條不一樣的 Feed），預選的是卡片順序上的第一個；Mikan 那一頁已經綁在作品上的字幕組不列（訂了也是 `series_bound`）。
+- 模型給的在選項裡才預選；選項不只一個或模型給的不在裡面時 `required`，卡片那一列是一排字幕組鍵（名字旁標來源）、沒選不畫確認鍵。卡片結果多 `subgroup_chosen_on_card`。
+- `torrents` 照選項裡最多的那一組：Mikan 是整季、關鍵字是第一批（`titles`）。選 Mikan 那一條按下去當場送整季；選關鍵字那一條列第一批、可以選「只追之後的」（`downloads`）。
 - 同一步算這部作品現有的訂閱（`rss.list_subscriptions`；加 Feed 只看得出 Mikan 單一 feed 的番組：`rss.subscriptions_of_feed_url`），存進 `existing`，卡片說出來、結果多 `existing_subscriptions`。
 
 **送單卡逐列算作品已經有的集**
@@ -1403,7 +1406,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 
 `services/agent_origins.py`，通用，只看伺服器存的歷史。
 
-- 寫入工具帶的 id（`feed_id`、`media_id`、`source_id`、`tv_route_id`、`movie_route_id`、`bangumi_id`、`subgroup_id`）要出現在這段對話先前的工具結果裡（網頁的不算）。`route_id` 不在其中：模型不給 Route（M5.6 票 04）。
+- 寫入工具帶的 id（`feed_id`、`media_id`、`source_id`、`tv_route_id`、`movie_route_id`）要出現在這段對話先前的工具結果裡（網頁的不算）。`route_id` 不在其中：模型不給 Route（M5.6 票 04）；訂閱的 `bangumi_id`、`subgroup_id`、來源與搜尋詞也不在（伺服器提出時自己找，M5.6 票 09）。
 - 帶 `connects_out` 的命令裡像網址的值，要逐字出現在使用者自己的某一則訊息裡。
 - 不是的回理由（`id_not_from_results`、`address_not_from_user`）給模型、不出卡。
 - 字串格子（不是 id、網址、列舉）的值出現在外部內容裡而使用者沒說過，就是**出自外部內容**：記在預覽的 `external_fields`（逐列欄位名），卡片只在那幾格標「出自網頁」。
@@ -2440,7 +2443,7 @@ services:
 
 - 每一條都有「模型照外部內容做了，系統擋住」的整合測試：假模型經真的工具讀到注入，下一步照做。
 - 注入的入口：
-  - torrent 標題、Feed Item、Mikan 番組資料。
+  - torrent 標題、Feed Item。
   - 網頁搜尋結果、AniList 的標題、Bangumi 放送表的名字。
   - Jellyfin 的作品名稱：認不出的作品名稱是資料夾名，常常就是發佈名，所以與 torrent 標題一樣不算 External Content。
 - 網頁、AniList、Bangumi 是 External Content，守法不分入口。
@@ -2452,7 +2455,7 @@ services:
 | 網址必須逐字出自使用者的話 | `agent_origins.Origins.check`（`CONNECTS_OUT`） | `tests/integration/test_agent_injection.py::TestAFeedFromOutside::test_a_feed_the_content_names_is_refused_and_never_fetched`、`tests/integration/test_agent_injection.py::TestAFeedFromOutside::test_the_users_own_feed_swapped_for_the_contents_is_refused` |
 | id 必須出自這段對話已存的工具結果 | `agent_origins.Origins.check` | `tests/integration/test_agent_injection.py::TestTorrentsNobodyAskedFor::test_a_source_the_content_made_up_is_refused_before_a_card` |
 | 送出 torrent 一律出卡 | `agent.needs_card`（`DOWNLOADS`） | `tests/integration/test_agent_injection.py::TestTorrentsNobodyAskedFor::test_a_download_the_content_pushes_stops_at_a_card` |
-| 種子名稱不算 External Content（算的話讀過搜尋結果之後每一張卡都亮）：照它取的關鍵字訂閱擋在卡片上（關鍵字訂閱一律出卡：字幕組要人選、第一批在卡上確認），按確認之前沒有 Feed、Job、torrent | `agent.needs_card`（`rss.subscribe_search` 帶 `DOWNLOADS`） | `tests/integration/test_agent_injection.py::TestTorrentsNobodyAskedFor::test_a_keyword_subscription_from_a_torrent_title_sends_nothing_by_itself` |
+| 種子名稱不算 External Content（算的話讀過搜尋結果之後每一張卡都亮）：照它給的字幕組訂閱擋在卡片上（訂閱一律出卡：字幕組要人選、第一批在卡上確認），按確認之前沒有 Feed、Job、torrent | `agent.needs_card`（`rss.subscribe` 帶 `DOWNLOADS`） | `tests/integration/test_agent_injection.py::TestTorrentsNobodyAskedFor::test_a_keyword_subscription_from_a_torrent_title_sends_nothing_by_itself` |
 | 改設定、服務位址永遠要人：不是工具，是的話只能是卡片工具 | `agent_tools.TOOLS`、`agent.needs_card`（`needs_person`） | `tests/integration/test_agent_injection.py::TestSettingsNeedAPerson::test_changing_a_service_address_is_not_a_tool`、`tests/integration/test_agent_injection.py::TestSettingsNeedAPerson::test_every_command_that_needs_a_person_is_a_card_or_no_tool_at_all` |
 | 憑證不進上下文 | 工具結果型別沒有憑證欄位、`commands.Private`、instructions 是固定的字 | `tests/integration/test_agent_injection.py::TestNoKeyReachesTheModel::test_no_message_sent_to_the_model_carries_a_key`、`tests/integration/test_agent_injection.py::TestNoKeyReachesTheModel::test_every_read_tool_is_tried` |
 | 新的讀取工具先歸類：注入的入口、走同一條守法路、或 Berth 自己的資料 | `test_agent_injection.ENTRIES`、`SAME_PATH`、`BERTHS_OWN` | `tests/integration/test_agent_injection.py::TestNoKeyReachesTheModel::test_every_read_tool_is_classified` |

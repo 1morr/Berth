@@ -6378,7 +6378,7 @@ export interface components {
          *     下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
          * @enum {string}
          */
-        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "route_required" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss" | "item_missing" | "item_not_excluded" | "series_unbound" | "feed_unprimed" | "interval_unsupported" | "bangumi_not_found" | "bangumi_without_subgroups" | "subgroup_not_found";
+        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "route_required" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss" | "item_missing" | "item_not_excluded" | "series_unbound" | "feed_unprimed" | "interval_unsupported" | "bangumi_not_found" | "bangumi_without_subgroups" | "subgroup_not_found" | "subgroups_not_found";
         /**
          * RssRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文或那一個 id。
@@ -7193,6 +7193,12 @@ export interface components {
             latest: string;
             /** Titles */
             titles: string[];
+            kind?: components["schemas"]["FeedKind"] | null;
+            /**
+             * Term
+             * @default
+             */
+            term?: string;
         };
         /** SubgroupOut */
         SubgroupOut: {

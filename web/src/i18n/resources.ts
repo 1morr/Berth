@@ -3725,6 +3725,7 @@ const zhHant = {
         'Mikan 上找不到這部作品的番組，或找到的幾個用開播日分不開。換一個來源或作品再試。',
       bangumi_without_subgroups: '找到番組了，但上面一個字幕組都沒有：Mikan 還沒有人發這部作品。',
       subgroup_not_found: '這個字幕組不在番組頁上。從清單裡選一個。',
+      subgroups_not_found: 'Mikan 與 nyaa、acg.rip 都沒有這部作品的字幕組：換一個來源或作品再試。',
     },
     feeds: {
       title: 'Feed',
@@ -4151,6 +4152,7 @@ const zhHant = {
       label: '要你確認',
       commands: {
         downloading_add_manual_download: '送出下載',
+        rss_subscribe: '訂閱這部作品',
         rss_subscribe_mikan: '訂閱 Mikan 番組',
         rss_subscribe_search: '訂閱關鍵字搜尋',
         rss_add_feed: '新增 RSS Feed',
@@ -4189,6 +4191,8 @@ const zhHant = {
         exclusions: '排除條件',
         bangumi: '番組',
         subgroup: '字幕組',
+        // 字幕組是哪一個站找到的（M5.6 票 09）：以作品訂閱的卡上兩條路都有。
+        source: '來源',
         site: '站',
         term: '搜尋詞',
         sends: '送出',
@@ -8214,6 +8218,8 @@ const en: Translations<typeof zhHant> = {
       bangumi_without_subgroups:
         'Found the bangumi, but it has no subgroups yet: nobody on Mikan is releasing this work.',
       subgroup_not_found: 'That subgroup is not on the bangumi page. Pick one from the list.',
+      subgroups_not_found:
+        'Mikan, nyaa and acg.rip all have no subgroup for this work: try another source or title.',
     },
     feeds: {
       title: 'Feeds',
@@ -8633,6 +8639,7 @@ const en: Translations<typeof zhHant> = {
       label: 'Needs you',
       commands: {
         downloading_add_manual_download: 'Send downloads',
+        rss_subscribe: 'Subscribe the work',
         rss_subscribe_mikan: 'Subscribe to a Mikan bangumi',
         rss_subscribe_search: 'Subscribe to a keyword search',
         rss_add_feed: 'Add an RSS feed',
@@ -8667,6 +8674,7 @@ const en: Translations<typeof zhHant> = {
         exclusions: 'Exclusions',
         bangumi: 'Bangumi',
         subgroup: 'Subgroup',
+        source: 'Source',
         site: 'Site',
         term: 'Search term',
         sends: 'Sends',

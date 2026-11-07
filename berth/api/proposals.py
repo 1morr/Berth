@@ -92,6 +92,10 @@ class SubgroupOptionOut(BaseModel):
     latest: str
     #: 關鍵字訂閱的第一批：按下確認就送出的發佈名，新的在前。Mikan 是空清單（整季）。
     titles: list[str]
+    #: 這一個是在哪一個站找到的（M5.6 票 09）。只有以作品訂閱的選項有；票 09 之前存的卡是 `null`。
+    kind: FeedKind | None = None
+    #: 關鍵字站的搜尋詞；Mikan 是空字串。票 09 之前存的卡是空字串。
+    term: str = ""
 
 
 class SubgroupAskOut(BaseModel):

@@ -78,7 +78,7 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
   }
 }
 
-function stored(state: 'approval-requested' | 'output-denied') {
+function stored(state: 'approval-requested' | 'output-denied', tool: string = TOOL) {
   return [
     { id: 'u1', role: 'user', parts: [{ type: 'text', text: '下載第 1 到 3 集' }] },
     {
@@ -86,7 +86,7 @@ function stored(state: 'approval-requested' | 'output-denied') {
       role: 'assistant',
       parts: [
         {
-          type: `tool-${TOOL}`,
+          type: `tool-${tool}`,
           toolCallId: CALL,
           state,
           input: { rows: [] },
@@ -732,6 +732,86 @@ describe('ConfirmCard', () => {
       await user.click(within(section).getByRole('button', { name: '確認這 1 項' }))
 
       expect(decisions).toEqual([{ approve: true, selection: [2], routes: [null, null, 4] }])
+    })
+  })
+
+  describe('a work subscription says where each subgroup comes from (M5.6 ticket 09)', () => {
+    const option = (
+      kind: 'mikan' | 'nyaa' | 'acgrip',
+      name: string,
+      titles: string[],
+      releases: number,
+      term = '',
+    ) => ({
+      key: `${kind}:${name}`,
+      name,
+      releases,
+      updated: '2026-10-20',
+      latest: titles[0] ?? '',
+      titles,
+      kind,
+      term,
+    })
+    const LoliHouse = option('mikan', 'LoliHouse', [], 12)
+    const Nyaa = option('nyaa', 'ANi', ['[ANi] SPY×FAMILY - 02 [1080P]'], 2, 'SPY x FAMILY')
+    const Acg = option('acgrip', 'ANi', ['[ANi] SPY×FAMILY - 02 [1080P][CHT]'], 1, '间谍过家家')
+    const work = (preselected: string | null, more: Partial<Proposal> = {}) =>
+      card({
+        command: 'rss.subscribe',
+        arguments: [{ subgroup: 'ANi', media_id: 'tv:120089', route_id: 3 }],
+        preview: {
+          effect: 'reversible',
+          flags: ['downloads'],
+          checked: [true],
+          external_fields: [[]],
+          held_back: 0,
+          torrents: [12],
+          routes: [],
+          single_routes: [],
+          subgroups: [{ options: [LoliHouse, Nyaa, Acg], preselected, required: true }],
+          existing: [],
+          first_batch: [true],
+          held: [],
+        },
+        ...more,
+      })
+
+    it('shows each option with its site and sends the one picked', async () => {
+      serve(work('nyaa:ANi'), stored('approval-requested', 'rss_subscribe'), () =>
+        work('nyaa:ANi', { status: 'executed', results: [done], subgroups: ['acgrip:ANi'] }),
+      )
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '訂閱這部作品' })
+      await within(section).findAllByText('SPY×FAMILY')
+      // 來源那一格，加上選項上的那一顆。
+      expect(within(section).getAllByText('NYAA').length).toBeGreaterThan(1)
+      expect(within(section).getByText('SPY x FAMILY')).toBeInTheDocument()
+      expect(within(section).getByRole('button', { name: /ACG\.RIP/ })).toBeInTheDocument()
+      expect(within(section).getByRole('button', { name: /LoliHouse/ })).toBeInTheDocument()
+
+      await user.click(within(section).getByRole('button', { name: /ACG\.RIP/ }))
+      await user.click(within(section).getByRole('button', { name: '確認' }))
+
+      expect(decisions).toEqual([
+        { approve: true, selection: null, subgroups: ['acgrip:ANi'], first_batch: ['all'] },
+      ])
+    })
+
+    it('a Mikan subgroup sends the whole season and a keyword one its first batch', async () => {
+      serve(work(null), stored('approval-requested', 'rss_subscribe'), () => work(null))
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '訂閱這部作品' })
+      await within(section).findAllByText('SPY×FAMILY')
+      await user.click(within(section).getByRole('button', { name: /ACG\.RIP/ }))
+      expect(within(section).getByText(/按下確認就送出第一批：1 個 torrent/)).toBeInTheDocument()
+
+      await user.click(within(section).getByRole('button', { name: /LoliHouse/ }))
+      expect(within(section).getByText(/會送出整季：12 個 torrent/)).toBeInTheDocument()
+      expect(within(section).queryByText('第一批')).toBeNull()
     })
   })
 
