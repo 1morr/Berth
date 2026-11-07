@@ -1232,7 +1232,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - **agent runtime**（`services/agent.py`）：一則使用者訊息是一輪（`Turn`，也是 pydantic-ai 的 deps）。
   - **工具**是 `TOOLS`（`services/agent_tools.py`，與 skills 共用）裡的登錄表命令，看得到哪幾個照命令的 `audience`，呼叫一律經執行器、actor 是 `ai:<user id>`，每次工具呼叫一個 session。
     - 完整清單是 `TOOLS` 與 `ANIME_TOOLS`（`agent_tools.py`）；`web.tavily_search` 只在設了 Tavily key 時給。
-    - 讀取類：`discover.search_media`、`discover.read_trending`、`why_not.explain`、`jobs.list_jobs`、`jobs.read_job_events`、`web.tavily_search`、`skills.load_skill`、`search.search_torrents`、`media.read_media`（`audience=user`；給模型的那一份沒有 `routes` 與 `default_route_id`，M5.6 票 04）、`routes.list_routes`、`bangumi.search_bangumi`、`bangumi.read_bangumi`、`ANIME_TOOLS`（動漫資料來源，§8.10）、`inventory.find_in_library`（用名字在這個人看得到的每一個媒體庫找，結果帶 `in_ledger`；劇集另有 `episodes`：Jellyfin 自己的季集號，依季收成範圍，不是 TMDB 的）、`rss.list_subscriptions`（不帶作品時列每一條訂閱）。
+    - 讀取類：`discover.search_media`、`discover.read_trending`、`why_not.explain`（說明寫出各結論的意思，M5.6 票 07）、`jobs.list_jobs`、`jobs.read_job_events`、`web.tavily_search`、`skills.load_skill`、`search.search_torrents`、`media.read_media`（`audience=user`；給模型的那一份沒有 `routes` 與 `default_route_id`，M5.6 票 04；整季以上都在 Jellyfin 時帶 `hint`，M5.6 票 07）、`routes.list_routes`、`bangumi.search_bangumi`、`bangumi.read_bangumi`、`ANIME_TOOLS`（動漫資料來源，§8.10）、`inventory.find_in_library`（用名字在這個人看得到的每一個媒體庫找，結果帶 `in_ledger`；劇集另有 `episodes`：Jellyfin 自己的季集號，依季收成範圍，不是 TMDB 的）、`rss.list_subscriptions`（不帶作品時列每一條訂閱）。
     - 寫入類（都出確認卡，見 §7〈確認卡〉與〈守法〉）：`downloading.add_manual_download`（送單）、`rss.subscribe_mikan`、`rss.subscribe_search`、`rss.add_feed`、`rss.delete_feed`。
     - `routes.check_route(s)` 不給：探測會觸發使用者設的「完成時執行外部程式」。
   - **記帳與防護**是一個 capability（`_Guard`）：`wrap_model_request` 先看次數、做完當場寫 `ai_calls` 與 `ai_runs` 再看 token；`wrap_tool_execute` 管同工具同參數（命令拒絕、參數錯、命令出錯、結果帶 `problem` 的都不計）；`on_run_error` 補記串流時出錯的那次呼叫（串流時 `wrap_model_request` 只收到 `CancelledError`，brief §20.24）。
@@ -1255,6 +1255,8 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
   - instructions 只列這個人用得上的那幾份的名稱與描述，全文由讀取命令 `skills.load_skill` 拿；`skills.list_skills` 給 `/skills`。
   - **用得上**＝`tools` 全在這個人的側面板工具裡（`agent_tools.visible_tools`），所以角色用不到的就像不存在。宣告的工具都是側面板的工具，由 `tests/unit/test_skills.py` 守。
   - skills 不寫 Route：模型不給，伺服器在提出時定（§7〈確認卡〉，「Route 由伺服器定」一段）。
+  - 三份（M5.6 票 07）：`download`（電影、一季、缺的集、整部系列，≤ 30 行）、`subscribe`、`recommend`；三份合計 ≤ 80 行（含 frontmatter），`tests/unit/test_skills.py` 的閘門雙向驗證（多寫會紅、只改格式不會）。跨任務的共同規則寫在 `agent.INSTRUCTIONS` 一次；skill 不重述、不點名作品。
+  - 重建帳本的指引只留一處：`media.read_media` 給模型的那一份在整季以上都 `in_jellyfin` 時帶 `hint`（英文一句，帶按鈕名兩種語言）。診斷沒入庫不是 skill：`why_not.explain` 的說明寫出每個結論的意思與「唯讀、先說結論、最後給下一步」。
 - 未來 MCP server 只需把 `services` 的命令包成 tool，schema 直接沿用 pydantic model。
 
 ---

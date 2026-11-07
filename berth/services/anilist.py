@@ -42,7 +42,7 @@ class AnimeOut(BaseModel):
 
 
 class SeasonEntry(AnimeOut):
-    #: 打過分的人數：少於 20 的分數不可靠（`new-season-picks`）。
+    #: 打過分的人數：少於 20 的分數不可靠（`recommend`）。
     scorers: int | None
     next_episode: int | None
 

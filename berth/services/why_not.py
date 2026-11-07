@@ -273,8 +273,21 @@ class _Episodes:
     about=(
         "Explain why a work, or one episode of it (episode = [season, episode]), is not in "
         "the library yet: a conclusion per episode, with the jobs, issues and RSS items "
-        "behind it. Reads Berth's records only. media_id looks like tv:1429 or movie:550 and "
-        "comes from an earlier tool result."
+        "behind it. Reads Berth's records only: read and answer, do not propose downloads or "
+        "changes. Answer with the conclusion first, grouped by reason with episode ranges "
+        '("S01E05-E08: no_source"), then the evidence, and end with the next step (Review, '
+        "the job's Retry, binding the RSS Series, releasing the RSS item, or, for no_source, "
+        "offer to search for a release). The conclusions mean: import_failed = downloaded, "
+        "but importing it failed, someone has to look at that job; download_failed = never "
+        "downloaded (the submit failed, the client reported an error, files went missing, "
+        "the torrent was removed, or an RSS submit was refused); awaiting_review = "
+        "downloaded and waiting in Review for an admin; unbound = an RSS feed has the "
+        "episode, but its RSS Series is not bound to a work yet; excluded = an RSS feed has "
+        'the episode, but an exclusion rule or "only new episodes" skipped it; no_source = '
+        "aired, but there is no job and no RSS item for it anywhere; downloading = on its "
+        "way; jellyfin_pending = imported, but Jellyfin has not picked the file up yet; "
+        "unaired = not aired yet, or TMDB has no air date; imported = it is there. media_id "
+        "looks like tv:1429 or movie:550 and comes from an earlier tool result."
     ),
 )
 async def explain(

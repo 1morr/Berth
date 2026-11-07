@@ -90,7 +90,7 @@ const STOPPED: Run = {
         },
         {
           command: 'skills.load_skill',
-          args_json: '{"name":"why-not-imported"}',
+          args_json: '{"name":"download"}',
           outcome: 'aborted',
           detail: '',
           truncated: false,

@@ -41,8 +41,9 @@ import httpx
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / ".local" / "experiments" / "results" / "m5_acceptance"
 BROWSER = {"X-Requested-With": "berth-acceptance"}
-#: 情境 2 的變體要看的那一句（`berth/skills/series-mapping/SKILL.md`；票 23d 之前是「兩種算法不一致」）。
-MISMATCH = "未經核對"
+#: 情境 2 的變體要看的那一句（`berth/skills/download/SKILL.md` 要模型寫的固定字樣，M5.6 票 07；
+#: 舊 skill 的「未經核對」跟著那份 skill 拿掉了）。只看有沒有出現，整季標了還是只標一列仍要讀逐字稿。
+MISMATCH = "unchecked"
 #: 模型問 Route、字幕組或來源時的固定回答（腳本不會臨場回話；第一輪實跑 S1、S3 都停在這個問題上）。
 ANSWER = "劇集用 Anime 路線，電影用 Movies；字幕組與來源照你推薦的挑，直接出卡給我確認。"
 #: 卡片上要人選 Route 時腳本選的（同 `ANSWER`）。
@@ -89,7 +90,7 @@ SCENARIOS = [
         "S2-mushoku",
         "無職轉生全系列：只列清單",
         ["幫我下載《無職轉生》全系列（不要短篇）。先列清單給我看，不要直接送。"],
-        "第二季（第 0 集在 Specials，S02E01–E12）整季標「未經核對，請確認」",
+        "第二季（第 0 集在 Specials，S02E01–E12）整季標 `unchecked`",
         expect=MISMATCH,
     ),
     Scenario(

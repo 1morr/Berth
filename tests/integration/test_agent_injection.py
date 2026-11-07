@@ -753,7 +753,7 @@ READ_ARGS: dict[str, dict[str, object]] = {
     "discover.search_media": {"query": "SPY×FAMILY"},
     "why_not.explain": {"media_id": SPY_ID},
     "jobs.list_jobs": {},
-    "skills.load_skill": {"name": "why-not-imported"},
+    "skills.load_skill": {"name": "download"},
     "search.search_torrents": {"media_id": SPY_ID},
     "web.tavily_search": {"query": "SPY×FAMILY"},
     "media.read_media": {"media_id": SPY_ID},

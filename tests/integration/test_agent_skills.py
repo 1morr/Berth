@@ -76,17 +76,17 @@ class TestProgressiveDisclosure:
         chat(client, "Hello")
 
         [instructions] = script.instructions
-        why_not = next(skill for skill in catalog() if skill.name == "why-not-imported")
-        assert f"- why-not-imported: {why_not.description}" in instructions
-        assert why_not.body not in instructions
+        download = next(skill for skill in catalog() if skill.name == "download")
+        assert f"- download: {download.description}" in instructions
+        assert download.body not in instructions
         assert "skills_load_skill" in instructions
-        assert "- series-mapping:" in instructions
+        assert "- subscribe:" in instructions
 
     def test_the_model_loads_a_skill_and_gets_its_whole_body(
         self, client: TestClient, script: Seen
     ) -> None:
         script.steps = [
-            call("skills_load_skill", name="why-not-imported"),
+            call("skills_load_skill", name="download"),
             say("Following the steps."),
         ]
 
@@ -95,8 +95,8 @@ class TestProgressiveDisclosure:
         assert response.status_code == 200, response.text
         [loaded] = returned(script, "skills_load_skill")
         assert loaded.model_response_object() == {
-            "name": "why-not-imported",
-            "instructions": body_of("why-not-imported"),
+            "name": "download",
+            "instructions": body_of("download"),
         }
         [turn] = recorded(client)
         assert [(tool.command, tool.outcome) for tool in turn.tools] == [
@@ -106,17 +106,17 @@ class TestProgressiveDisclosure:
     def test_a_skill_that_is_not_offered_cannot_be_loaded(
         self, client: TestClient, script: Seen
     ) -> None:
-        # 一般使用者訂閱不了（`rss.*` 只給管理員），推薦新番那一份對他不存在。
+        # 一般使用者訂閱不了（`rss.*` 只給管理員），推薦那一份對他不存在。
         sign_in_crew(client)
-        script.steps = [call("skills_load_skill", name="new-season-picks"), say("No such skill.")]
+        script.steps = [call("skills_load_skill", name="recommend"), say("No such skill.")]
 
         chat(client, "What's good this season?")
 
-        assert "new-season-picks" not in script.instructions[0]
+        assert "recommend" not in script.instructions[0]
         [refused] = returned(script, "skills_load_skill")
         assert refused.model_response_object() == {
             "refused": "skill_missing",
-            "detail": "new-season-picks",
+            "detail": "recommend",
         }
         [turn] = recorded(client)
         assert [(tool.command, tool.outcome) for tool in turn.tools] == [
@@ -127,11 +127,11 @@ class TestProgressiveDisclosure:
         self, client: TestClient, script: Seen
     ) -> None:
         sign_in_crew(client)
-        script.steps = [call("skills_load_skill", name="why-not-imported"), say("OK.")]
+        script.steps = [call("skills_load_skill", name="download"), say("OK.")]
 
-        chat(client, "Why is episode 3 missing?")
+        chat(client, "How do I download a season?")
 
-        assert "- why-not-imported:" in script.instructions[0]
+        assert "- download:" in script.instructions[0]
         assert "skills_load_skill" in script.tools[0]
         [loaded] = returned(script, "skills_load_skill")
-        assert loaded.model_response_object()["name"] == "why-not-imported"
+        assert loaded.model_response_object()["name"] == "download"

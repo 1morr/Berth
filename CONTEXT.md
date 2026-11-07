@@ -209,7 +209,7 @@ _Avoid_: method, rule, source
 _Avoid_: subtitle, part name
 
 **Franchise**（系列）:
-一部動畫的全部部分：每一季、cour、OVA、劇場版（總集篇、衍生作與短篇要問了才算），照播出順序排，`series-mapping` 從網頁的集數表（沒有網搜時從 TMDB 播出日的空檔）列出來（M5 票 23d 起不再走 AniList 的關係圖）。TMDB 常把其中好幾個併成一季，所以一個 Franchise 對到的是幾個 Media 與各自的季集範圍。AniList 的「季」（`AnimeSeason`：冬春夏秋的播出季度）與 TMDB 的 Season 是兩件事。
+一部動畫的全部部分：每一季、cour、OVA、劇場版（總集篇、衍生作與短篇要問了才算），照播出順序排，`download` 從網頁的集數表（沒有網搜時從 TMDB 播出日的空檔）列出來（M5 票 23d 起不再走 AniList 的關係圖）。TMDB 常把其中好幾個併成一季，所以一個 Franchise 對到的是幾個 Media 與各自的季集範圍。AniList 的「季」（`AnimeSeason`：冬春夏秋的播出季度）與 TMDB 的 Season 是兩件事。
 _Avoid_: series（Series 在這裡是 RSS Series 與 TMDB 劇集）, collection（TMDB 的電影合集）
 
 **Cour**:

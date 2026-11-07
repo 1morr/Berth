@@ -335,7 +335,7 @@ class TestSkills:
 
         expected = [entry.model_dump() for entry in in_portal(client, _skills_for_admin)]
         assert listed == {"command": "skills", "skills": expected}
-        assert "why-not-imported" in [s["name"] for s in listed["skills"]]
+        assert "download" in [s["name"] for s in listed["skills"]]
 
 
 async def _skills_for_admin(_session: AsyncSession) -> list[Any]:

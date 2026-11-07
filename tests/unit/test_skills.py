@@ -6,11 +6,14 @@
 - **漸進揭露**：instructions 只列名稱與描述，`skills.load_skill` 回全文；流程要的工具這個人在側面板
   看不到的，不列也不給載。
 - **宣告的工具都是側面板的工具**：票 16 之後沒有還在等的（原本的 `PENDING` 跟著拿掉）。
+- **三份、內文合計 ≤ 80 行**（M5.6 票 07）：共同規則寫一次在系統指示，skill 只寫這類任務的決策
+  順序、不點名特定作品。行數閘門同樣雙向驗證。
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -32,12 +35,41 @@ from berth.services.skills import (
     read_skills,
 )
 
-#: 第一批（票 19）。
-FIRST_BATCH = {"series-mapping", "new-season-picks", "why-not-imported", "missing-episodes"}
-#: repo 裡現在的全部：票 27 加訂閱。
-SKILLS = FIRST_BATCH | {"subscribe"}
+#: repo 裡現在的全部：M5.6 票 07 把 5 份併成這 3 份。
+SKILLS = {"download", "recommend", "subscribe"}
 #: 要 `rss.*`（只給管理員）的那幾份。
-ADMIN_ONLY = {"new-season-picks", "subscribe"}
+ADMIN_ONLY = {"recommend", "subscribe"}
+
+#: 三份 skill 的總行數上限（M5.6 票 07 驗收：≤ 80，含票 09 改寫後的 `subscribe`）。
+SKILL_LINE_LIMIT = 80
+
+#: 驗收情境裡點過名的作品（B3）：skill 只寫通則，作品名留在情境與票裡。名單寫在這裡，
+#: 新增情境點名新作品時要跟著加。
+NAMED_WORKS = ("re:zero", "mushoku", "無職", "hunter", "宝石", "非人少女")
+
+#: 票上的兩個逐檔上限（M5.6 票 07 驗收），算檔案行數。
+FILE_LIMITS = {"download": 30, "recommend": 20}
+
+
+def skill_lines(skill: Skill, root: Path = SKILLS_ROOT) -> int:
+    """一份 skill 的檔案行數（frontmatter 也算：票與 spec 的數字是整份）。"""
+    return len((root / skill.name / "SKILL.md").read_text(encoding="utf-8").splitlines())
+
+
+def named_works_in(skills: Iterable[Skill]) -> list[str]:
+    """內文或描述點到作品的 skill 名。"""
+    return [
+        skill.name
+        for skill in skills
+        if any(work in f"{skill.description}\n{skill.body}".lower() for work in NAMED_WORKS)
+    ]
+
+
+def over_budget(skills: Iterable[Skill], root: Path = SKILLS_ROOT) -> list[str]:
+    """超過上限的抱怨；沒超過是空的。"""
+    lines = sum(skill_lines(skill, root) for skill in skills)
+    return [] if lines <= SKILL_LINE_LIMIT else [f"{lines} lines of skills, over the limit"]
+
 
 VALID = """\
 ---
@@ -219,6 +251,56 @@ class TestTheSkillsInTheRepo:
             assert TAVILY_TOOL not in skill.tools, skill.name
 
 
+class TestTheBudget:
+    """三份的總行數與兩個逐檔上限（M5.6 票 07）：多寫會紅，只改格式不會。"""
+
+    def test_the_repo_skills_fit(self) -> None:
+        assert over_budget(catalog()) == []
+
+    def test_the_two_limits_from_the_ticket(self) -> None:
+        for skill in catalog():
+            limit = FILE_LIMITS.get(skill.name)
+            if limit is not None:
+                assert skill_lines(skill) <= limit, skill.name
+
+    def test_a_skill_that_grows_past_the_limit_is_caught(self, tmp_path: Path) -> None:
+        grown = VALID + "\n" + "more steps\n" * SKILL_LINE_LIMIT
+        write(tmp_path, "why-not-imported", grown)
+        assert over_budget([parse_skill("why-not-imported", grown)], tmp_path)
+
+    @pytest.mark.parametrize(
+        "reformatted",
+        [
+            pytest.param(
+                VALID.replace("name: why-not-imported", 'name: "why-not-imported"'),
+                id="quoted-name",
+            ),
+            pytest.param(VALID.replace("\n", "\r\n"), id="crlf"),
+            pytest.param(VALID.replace("---\n\n1.", "---  \n\n1."), id="spaces-after-fence"),
+        ],
+    )
+    def test_reformatting_does_not_change_the_count(self, tmp_path: Path, reformatted: str) -> None:
+        write(tmp_path, "why-not-imported", VALID)
+        assert skill_lines(parse_skill("why-not-imported", reformatted), tmp_path) == skill_lines(
+            parse_skill("why-not-imported", VALID), tmp_path
+        )
+
+
+class TestNoWorkIsNamed:
+    """B3（M5.6 票 07）：skill 只寫通則，作品名留在驗收情境裡。"""
+
+    def test_the_repo_skills_name_none(self) -> None:
+        assert named_works_in(catalog()) == []
+
+    def test_a_skill_that_names_a_work_is_caught(self) -> None:
+        named = parse_skill("why-not-imported", VALID + "\n3. Download Re:Zero.\n")
+        assert named_works_in([named]) == ["why-not-imported"]
+
+    def test_a_reformatting_that_names_nothing_is_not_caught(self) -> None:
+        reformatted = VALID.replace("tools:\n  - why_not.explain\n", "tools: [why_not.explain]\n")
+        assert named_works_in([parse_skill("why-not-imported", reformatted)]) == []
+
+
 class TestWhatThePanelOffers:
     def test_a_skill_shows_only_when_all_its_tools_are_there(self) -> None:
         skill = parse_skill("why-not-imported", VALID)
@@ -228,8 +310,8 @@ class TestWhatThePanelOffers:
     @pytest.mark.asyncio
     async def test_the_list_has_names_and_descriptions(self) -> None:
         listed = {entry.name: entry.description for entry in await list_skills(role=Role.ADMIN)}
-        assert "why-not-imported" in listed
-        assert listed["why-not-imported"]
+        assert "download" in listed
+        assert listed["download"]
         assert set(listed) <= SKILLS
 
     @pytest.mark.asyncio
@@ -241,15 +323,15 @@ class TestWhatThePanelOffers:
 
     @pytest.mark.asyncio
     async def test_load_skill_returns_the_whole_body(self) -> None:
-        skill = next(skill for skill in catalog() if skill.name == "why-not-imported")
-        loaded = await load_skill("why-not-imported", role=Role.USER)
-        assert loaded.name == "why-not-imported"
+        skill = next(skill for skill in catalog() if skill.name == "download")
+        loaded = await load_skill("download", role=Role.USER)
+        assert loaded.name == "download"
         assert loaded.instructions == skill.body
-        assert "`why_not_explain`" in loaded.instructions
+        assert "`search_search_torrents`" in loaded.instructions
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("name", "role"), [("no-such-skill", Role.ADMIN), ("new-season-picks", Role.USER)]
+        ("name", "role"), [("no-such-skill", Role.ADMIN), ("recommend", Role.USER)]
     )
     async def test_an_unknown_or_unavailable_skill_is_refused(self, name: str, role: Role) -> None:
         with pytest.raises(SkillRefusedError) as refused:
