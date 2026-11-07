@@ -110,7 +110,7 @@ def local_now() -> datetime:
     Effect.READ,
     about=(
         "Whether each subscribed work is keeping up: per work its release groups, the latest "
-        "aired and imported episode, the why-not-imported conclusion for what is missing after "
+        "aired and imported episode, the why_not_explain conclusion for what is missing after "
         "the last imported episode (stalled downloads called out), and how many days late the "
         "overdue episodes are (counted from the air date). section is action, on_time or "
         "dormant (missing for more than 60 days, no longer reminded). Reads Berth's records only."

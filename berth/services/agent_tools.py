@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date
 
-from berth.domain import Role, number_ranges, season_ranges
+from berth.domain import EpisodeStatus, Role, number_ranges, season_ranges
 from berth.services.registry import commands
 
 #: 只有設了 Tavily key 才給模型的那一支。
@@ -118,7 +118,7 @@ MODEL_SEARCH_ROWS_NARROWED = 20
 def _rows_to_show(rows: list[object], limit: int) -> list[object]:
     """前 `limit` 列，加上之後每一列「符合」而帶來新的集的（照原本的順序）。
 
-    補缺集一季只搜一次（`missing-episodes`）：一季缺十幾集、每集各自一個發佈時，前 10 列常被幾集的
+    補缺集一季只搜一次（`download`）：一季缺十幾集、每集各自一個發佈時，前 10 列常被幾集的
     好幾個版本佔滿（票 23d 的紅燈）。不靠模型再搜：每一集至少有一列進得來，多的才不給。
 
     `limit` 由呼叫端給：帶 `contains` 的那一次放寬（`MODEL_SEARCH_ROWS_NARROWED`）。"""
@@ -181,13 +181,17 @@ def _compact_row(row: object) -> object:
 def _compact_media(result: object) -> object:
     """`media.read_media` 給模型的那一份（票 16）：一季一集一筆的集表在長的一季就超過截斷上限——
     Re:Zero 的 TMDB 第 1 季 85 集，`agent_guards.clip` 砍掉 `seasons` 之後模型看不到那一季的總集數，
-    `series-mapping` 對範圍要的正是它。逐集換成「狀態 → 集數範圍」（`imported: "1-25, 27"`），
-    檔案只留季集、tags 與狀態；海報網址與英文簡介模型用不到。"""
+    `download` 對範圍要的正是它。逐集換成「狀態 → 集數範圍」（`imported: "1-25, 27"`），
+    檔案只留季集、tags 與狀態；海報網址與英文簡介模型用不到。整季以上都在 Jellyfin 時另帶一句
+    `hint`（M5.6 票 07）：重建帳本的指引只在那一句。"""
     if not isinstance(result, dict):
         return result
     kept = {k: v for k, v in result.items() if k not in _MEDIA_DROPPED}
     if isinstance(kept.get("seasons"), list):
-        kept["seasons"] = [_compact_season(season) for season in kept["seasons"]]
+        seasons = kept["seasons"]
+        if (hint := _rebuild_hint(seasons)) is not None:
+            kept["hint"] = hint
+        kept["seasons"] = [_compact_season(season) for season in seasons]
     if isinstance(kept.get("jellyfin_unmatched"), list):
         kept["jellyfin_unmatched"] = _compact_unmatched(kept["jellyfin_unmatched"])
     if isinstance(kept.get("files"), list):
@@ -196,6 +200,39 @@ def _compact_media(result: object) -> object:
             for row in kept["files"]
         ]
     return kept
+
+
+#: 「從媒體庫重建帳本」的指引（M5.6 票 07）只留一處：`media.read_media` 給模型的這一句，skill 與
+#: 系統指示都不再寫。英文：寫給模型的，不是 UI 文案；按鈕名照畫面帶兩種語言。
+REBUILD_LEDGER_HINT = (
+    "Jellyfin has all of {seasons} outside Berth's records. Tell the user Berth does not know "
+    'those files, and that an admin can rebuild the ledger: the "Rebuild the ledger from the '
+    "library\" button (從媒體庫重建帳本) at the top of Berth's Issues page (待處理)."
+)
+
+
+def _rebuild_hint(seasons: list[object]) -> str | None:
+    """一整季以上都只在 Jellyfin、Berth 帳本裡沒有的那幾季：已播的每一集都 `in_jellyfin`
+    （`unaired` 的集不算，Jellyfin 有沒有都一樣）。"""
+    whole: list[str] = []
+    for season in seasons:
+        rows = _episode_rows(season)
+        number = season.get("season_number") if isinstance(season, dict) else None
+        if not rows or not isinstance(number, int):
+            continue
+        statuses = [str(row.get("status")) for row in rows if isinstance(row, dict)]
+        aired = [status for status in statuses if status != EpisodeStatus.UNAIRED]
+        if aired and all(status == EpisodeStatus.IN_JELLYFIN for status in aired):
+            whole.append(f"S{number:02d}")
+    return REBUILD_LEDGER_HINT.format(seasons=", ".join(whole)) if whole else None
+
+
+def _episode_rows(season: object) -> list[object] | None:
+    """一季的集表；不是一季的（電影、壞資料）是 `None`。`_compact_season` 與重建帳本的提示共用。"""
+    if not isinstance(season, dict):
+        return None
+    episodes = season.get("episodes")
+    return episodes if isinstance(episodes, list) else None
 
 
 #: `routes` 與 `default_route_id` 也是給人的（作品頁的下拉）：模型不給 Route，也就不必看它
@@ -227,12 +264,15 @@ def _compact_unmatched(rows: list[object]) -> dict[str, object]:
 
 
 def _compact_season(season: object) -> object:
-    if not isinstance(season, dict) or not isinstance(season.get("episodes"), list):
+    if not isinstance(season, dict):
+        return season
+    rows = _episode_rows(season)
+    if rows is None:
         return season
     by_status: dict[str, list[int]] = {}
     jobs: dict[str, str] = {}
     maybe: list[int] = []
-    for episode in season["episodes"]:
+    for episode in rows:
         if not isinstance(episode, dict) or not isinstance(episode.get("episode_number"), int):
             continue
         status = str(episode.get("status"))
@@ -248,7 +288,7 @@ def _compact_season(season: object) -> object:
     # 票 28：狀態照舊（多半是缺），只是 Jellyfin 有一集編號相同、卻對不上 TMDB。
     if maybe:
         compact["jellyfin_maybe"] = number_ranges(maybe)
-    if blocks := _aired_blocks(season["episodes"]):
+    if blocks := _aired_blocks(rows):
         compact["aired_blocks"] = blocks
     return compact
 
@@ -258,7 +298,7 @@ AIRING_GAP_DAYS = 28
 
 
 def _aired_blocks(episodes: list[object]) -> list[dict[str, str]]:
-    """播出日連得起來的幾段（票 23d）：沒有網路搜尋時 `series-mapping` 拿它切出各季、各 cour。
+    """播出日連得起來的幾段（票 23d）：沒有網路搜尋時 `download` 拿它切出各季、各 cour。
     逐集的日期換成「哪幾集、從哪天到哪天」，還沒定播出日的那幾集不進任何一段。"""
     dated = sorted(
         (episode["episode_number"], date.fromisoformat(episode["air_date"]))

@@ -433,7 +433,7 @@ class TestWhatTheModelSeesOfAWork:
         assert seen["seasons"][0]["episodes"] == {"missing": "1-85"}
 
     def test_airing_gaps_split_a_season_into_blocks(self) -> None:
-        """票 23d：沒有網路搜尋時 `series-mapping` 靠 TMDB 各集的播出日切段，給模型的那一份要
+        """票 23d：沒有網路搜尋時 `download` 靠 TMDB 各集的播出日切段，給模型的那一份要
         留得下。
         像無職轉生第 1 季：E01–E11 冬季每週一集（E03 之後停播一週不算斷開）、E12–E23 秋季；
         還沒定播出日的 E24 不進任何一段。"""
@@ -456,3 +456,74 @@ class TestWhatTheModelSeesOfAWork:
             {"episodes": "1-11", "from": "2021-01-11", "to": "2021-03-29"},
             {"episodes": "12-23", "from": "2021-10-04", "to": "2021-12-20"},
         ]
+
+
+class TestTheRebuildLedgerHint:
+    """「從媒體庫重建帳本」只留一處（M5.6 票 07）：整季以上都在 Jellyfin、Berth 卻沒有紀錄時，
+    `media.read_media` 給模型的那一份帶一句 `hint`；skill 與系統指示都不再寫。"""
+
+    @staticmethod
+    def season(number: int, statuses: list[str]) -> dict[str, object]:
+        return {
+            "season_number": number,
+            "episode_count": len(statuses),
+            "episodes": [
+                {"episode_number": n, "status": status} for n, status in enumerate(statuses, 1)
+            ],
+        }
+
+    def test_a_whole_season_in_jellyfin_says_how_to_rebuild(self) -> None:
+        seen = MODEL_VIEWS["media.read_media"](
+            {"seasons": [self.season(1, ["in_jellyfin", "in_jellyfin"])]}
+        )
+
+        assert isinstance(seen, dict)
+        assert seen["hint"] == (
+            "Jellyfin has all of S01 outside Berth's records. Tell the user Berth does not know "
+            'those files, and that an admin can rebuild the ledger: the "Rebuild the ledger from '
+            "the library\" button (從媒體庫重建帳本) at the top of Berth's Issues page (待處理)."
+        )
+
+    def test_several_whole_seasons_are_named(self) -> None:
+        seen = MODEL_VIEWS["media.read_media"](
+            {
+                "seasons": [
+                    self.season(1, ["in_jellyfin"]),
+                    self.season(2, ["in_jellyfin", "in_jellyfin"]),
+                    self.season(3, ["missing"]),
+                ]
+            }
+        )
+
+        assert isinstance(seen, dict)
+        assert seen["hint"].startswith("Jellyfin has all of S01, S02 outside Berth's records.")
+
+    def test_an_episode_that_has_not_aired_does_not_hold_it_back(self) -> None:
+        """未播的那一集 Jellyfin 有沒有都一樣：已播的每一集都在，就是整季。"""
+        seen = MODEL_VIEWS["media.read_media"](
+            {"seasons": [self.season(1, ["in_jellyfin", "in_jellyfin", "unaired"])]}
+        )
+
+        assert isinstance(seen, dict)
+        assert "hint" in seen
+
+    def test_a_season_with_an_episode_missing_does_not(self) -> None:
+        seen = MODEL_VIEWS["media.read_media"](
+            {"seasons": [self.season(1, ["in_jellyfin", "missing"])]}
+        )
+
+        assert isinstance(seen, dict)
+        assert "hint" not in seen
+
+    def test_a_movie_or_an_unchecked_jellyfin_has_no_hint(self) -> None:
+        """電影沒有季表；問不到 Jellyfin 時每一集照帳本說缺，不會誤觸。"""
+        movie = MODEL_VIEWS["media.read_media"]({"seasons": []})
+
+        assert isinstance(movie, dict)
+        assert "hint" not in movie
+
+        unknown = MODEL_VIEWS["media.read_media"](
+            {"seasons": [self.season(1, ["missing", "missing"])]}
+        )
+        assert isinstance(unknown, dict)
+        assert "hint" not in unknown

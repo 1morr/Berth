@@ -151,7 +151,9 @@ class MediaView:
         "unknown when Jellyfin could not be asked), Jellyfin episodes that match no TMDB "
         "episode (jellyfin_unmatched, in Jellyfin's numbering; the TMDB episodes with the same "
         "numbers are jellyfin_maybe: maybe there, still counted as missing), and the files "
-        "Berth imported. Submitting a download does not need a route: Berth picks it."
+        "Berth imported. A hint asks the user to rebuild the ledger when a whole season or "
+        "more is in Jellyfin and Berth's records do not know it. Submitting a download does "
+        "not need a route: Berth picks it."
     ),
     audience=Role.USER,
 )

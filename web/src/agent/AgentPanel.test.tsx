@@ -1498,7 +1498,10 @@ describe('AgentPanel slash commands', () => {
           json({
             command: 'skills',
             skills: [
-              { name: 'why-not-imported', description: 'Find out why an episode is missing.' },
+              {
+                name: 'download',
+                description: 'Download a movie or the episodes a series is missing.',
+              },
             ],
           }),
       }),
@@ -1509,8 +1512,10 @@ describe('AgentPanel slash commands', () => {
     await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/skills{Enter}')
 
     const output = within(await screen.findByRole('region', { name: '/skills' }))
-    expect(output.getByText('why-not-imported')).toBeInTheDocument()
-    expect(output.getByText('Find out why an episode is missing.')).toHaveAttribute('lang', 'en')
+    expect(output.getByText('download')).toBeInTheDocument()
+    expect(
+      output.getByText('Download a movie or the episodes a series is missing.'),
+    ).toHaveAttribute('lang', 'en')
   })
 
   it('starts a new conversation on /new', async () => {

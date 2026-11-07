@@ -2658,7 +2658,7 @@ async def test_tmdb_search_multi_keeps_the_original_title_next_to_the_translatio
 
 
 def test_a_search_result_says_whether_it_is_animation() -> None:
-    """`genre_ids` 有 16（Animation）就是動畫：側面板照它只挑動畫（`series-mapping` 的退路）。
+    """`genre_ids` 有 16（Animation）就是動畫：側面板照它只挑動畫（`download` 的整系列退路）。
     SPY×FAMILY 的劇集與電影都是 16；宮崎駿那一輪的三部作品不是（劇情、紀錄片、沒填類型）。"""
     spy = json.loads(read_fixture("http/tmdb/search-multi.spy-x-family.en.json"))["results"]
     assert [(e.tmdb_id, e.animation) for e in parse_entries(spy)] == [

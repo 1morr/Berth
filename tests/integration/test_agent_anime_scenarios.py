@@ -363,7 +363,7 @@ class TestNewSeasonPicks:
     @pytest.fixture(autouse=True)
     def model(self, script: Script) -> None:
         script.steps = [
-            call("skills_load_skill", name="new-season-picks"),
+            call("skills_load_skill", name="recommend"),
             call("anilist_read_season", season="FALL", year=2026),
             call("bgm_read_calendar"),
             say("Here are this season's picks."),
@@ -411,7 +411,7 @@ class TestNewSeasonPicks:
         chat(client, "這季有什麼好看的新番？")
 
         [loaded] = returned(script, "skills_load_skill")
-        assert loaded["name"] == "new-season-picks"
+        assert loaded["name"] == "recommend"
         assert commands_of(client) == [
             ("skills.load_skill", "ok"),
             ("anilist.read_season", "ok"),
@@ -483,9 +483,9 @@ class TestNewSeasonPicks:
 
 
 def to_the_work(script: Script) -> list[Any]:
-    """skill → 找 TMDB → 讀作品（`series-mapping` 第 1、2 步）。"""
+    """skill → 找 TMDB → 讀作品（`download` 第 1、2 步）。"""
     return [
-        call("skills_load_skill", name="series-mapping"),
+        call("skills_load_skill", name="download"),
         call("discover_search_media", query="Re:Zero"),
         call("media_read_media", media_id=REZERO_ID),
     ]
@@ -623,9 +623,9 @@ class TestWhatAUserSees:
         assert set(script.tools[0]) >= self.ANIME_TOOLS
         assert "rss_subscribe_mikan" not in script.tools[0]
         instructions = script.instructions[0]
-        # `new-season-picks` 用 `rss.*`（只給管理員）；`series-mapping` 的工具一般使用者都有。
-        assert "- new-season-picks:" not in instructions
-        assert "- series-mapping:" in instructions
+        # `recommend` 用 `rss.*`（只給管理員）；`download` 的工具一般使用者都有。
+        assert "- recommend:" not in instructions
+        assert "- download:" in instructions
 
 
 def test_the_anime_tools_are_external_content() -> None:

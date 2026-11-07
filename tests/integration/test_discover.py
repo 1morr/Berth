@@ -243,7 +243,7 @@ class TestCache:
     async def test_a_search_result_carries_its_year_and_whether_it_is_animation(
         self, session: AsyncSession
     ) -> None:
-        """側面板挑動畫、比首播年要的兩格（`series-mapping` 的退路，M5 票 16 之後）。"""
+        """側面板挑動畫、比首播年要的兩格（`download` 的整系列退路，M5 票 16 之後）。"""
         anime = dataclasses.replace(SPY_FAMILY, animation=True)
         client = tmdb(search={"spy x family": [anime, dataclasses.replace(SILO, animation=False)]})
         factory = await credentialled(session, client)

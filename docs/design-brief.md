@@ -713,6 +713,8 @@ Media 詳情各塊的規則：
 - **送單卡逐列標出作品已經有的集**（帳本或這個人的 Jellyfin，「含已有的第 N 集」）：伺服器提出時算，不靠助理說。
 - 整個系列一次送單時先出一張總覽卡，逐列可取消勾選（§20.24）。
 
+**skills 只寫決策順序**（M5.6）：跨任務的共同規則（搜尋與字幕語言、只在使用者要下載或問有什麼時才搜種子、已有的不重抓、確認卡的說法）寫一次在系統指示；skill 只寫這類任務的決策順序，不重述工具說明、不點名特定作品。三份：`download`（電影、一季、缺的集、整部系列）、`subscribe`（連載中的作品）、`recommend`（新番與趨勢），三份合計 ≤ 80 行（`tests/unit/test_skills.py` 的閘門）。診斷沒入庫的原因不是 skill：各結論的意思寫在 `why_not.explain` 的工具說明；「從媒體庫重建帳本」的指引只由 `media.read_media` 的輸出帶出（整季以上都在 Jellyfin、帳本沒有時）。
+
 **provider**：Anthropic Messages API 與 OpenAI 相容的 Chat Completions 都做，使用者自己設 base URL 與 key（自架閘道、OpenRouter、本機模型走後者）。網路搜尋在 Anthropic 用伺服器端 `web_search`，另可設 Tavily key（兩種 provider 都能用）。
 
 ---
@@ -1343,7 +1345,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 
 - **AniList**（`POST https://graphql.anilist.co`，免 key、不要求 User-Agent）：文件寫 90 次 / 分，頁首警告**目前降級成 30 次 / 分**（[Rate Limiting](https://docs.anilist.co/guide/rate-limiting)；實測 `X-RateLimit-Limit: 30`）；超過就**封一分鐘**，期間全回 429 帶 `Retry-After` 與 `X-RateLimit-Reset`，所以重試要全程序一起停。錯誤寫在 `errors`（錯參數回 400），`Page.media(id_in)` 問不存在的 id 回 200 加空清單；`Page` 一頁最多 50 筆（要 60 回 50）。條款（[Terms of Use](https://docs.anilist.co/guide/terms-of-use)）：月營收 < $150 免費；**禁止當備份 / 儲存服務、禁止 hoarding**，所以 Berth 只按需問、程序內快取 6 小時、不落地。`relations` 用 `relationType(version: 2)`。打分人數是 `stats.scoreDistribution[].amount` 加總。
 - **Bangumi**（`GET https://api.bgm.tv/calendar`，免 key）：**非瀏覽器要帶 User-Agent（開發者 ID 與應用名，分發的帶版本、開源的帶主頁）**，預設的可能被擋（[user agent.md](https://github.com/bangumi/api/blob/master/docs-raw/user%20agent.md)）；Berth 送 `1morr/berth/<版本> (https://github.com/1morr/Berth)`。`/calendar` 在 `open-api/api.yml`（不在 `v0.yaml`），欄位全非必填（112 部裡 57 部有 `rank`、93 部有 `rating.score`）；回 `cache-control: max-age=3600`，Berth 記一小時；無公布速率上限。
-- **Fribb**（`raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json`，7.5 MB、39,579 筆）：**倉庫無授權檔**，上游 anime-offline-database 為 **ODbL 1.0**；判讀（非法律意見）嚴格說保留所有權利，Berth 的結論是執行時下載到使用者自己的 `CONFIG_ROOT`、只自己查詢，**不打包進 repo 或 image**（那才是再散布），不加 ODbL 署名（無公開使用，§4.3）。每週二約 16:04 UTC 更新，下載會斷（要先解得開才換舊檔）；僅約兩成條目有 TMDB id；`episode_offset.tmdb` 差一集（Re:Zero 第 2 季寫 26，實際 E26–E38）。17 部實測見 [fribb-vs-chaining](research/fribb-vs-chaining-2026-10-28.md)：Fribb 錯在季與 offset，只靠集數串接錯在 Specials 與 TMDB 拆條目，所以 `series-mapping` 兩種都算、不一致整季交給人。
+- **Fribb**（`raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json`，7.5 MB、39,579 筆）：**倉庫無授權檔**，上游 anime-offline-database 為 **ODbL 1.0**；判讀（非法律意見）嚴格說保留所有權利，Berth 的結論是執行時下載到使用者自己的 `CONFIG_ROOT`、只自己查詢，**不打包進 repo 或 image**（那才是再散布），不加 ODbL 署名（無公開使用，§4.3）。每週二約 16:04 UTC 更新，下載會斷（要先解得開才換舊檔）；僅約兩成條目有 TMDB id；`episode_offset.tmdb` 差一集（Re:Zero 第 2 季寫 26，實際 E26–E38）。17 部實測見 [fribb-vs-chaining](research/fribb-vs-chaining-2026-10-28.md)：Fribb 錯在季與 offset，只靠集數串接錯在 Specials 與 TMDB 拆條目，所以 `download` 的整系列段兩種都算、不一致整季交給人（M5.6 起 skill 只寫通則）。
 
 **放送時間表的來源**（2026-10-31 查證，M5.5 規劃，plan §11.6b）
 

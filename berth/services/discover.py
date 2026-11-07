@@ -101,7 +101,7 @@ class _KindFeed(Protocol):
 
 
 # TMDB 的結果快取下來，過期重抓不算改東西（同 `media.read_media`）。`/discover` 登入就能用，
-# 所以一般使用者的側面板也拿得到推薦（M5 票 16，`new-season-picks`）。
+# 所以一般使用者的側面板也拿得到推薦（M5 票 16，`recommend`）。
 @command(
     Effect.READ,
     audience=Role.USER,
