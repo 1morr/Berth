@@ -50,6 +50,21 @@ def test_every_tool_is_a_registered_command_with_an_about() -> None:
         assert registry[name].about, name
 
 
+def test_the_model_has_eighteen_tools() -> None:
+    """M5.6 票 09 收尾：22 → 18（研究文檔〈改後的工具清單〉）。數字由這裡斷言，完整清單在
+    `test_agent_api.py::TestWhoCanUseWhat`。"""
+    assert len(TOOLS) == 18
+    # 命令留著（RSS 頁與作品頁在用），只是不再是給模型的工具。
+    for name in (
+        "bangumi.search_bangumi",
+        "bangumi.read_bangumi",
+        "rss.subscribe_mikan",
+        "rss.subscribe_search",
+    ):
+        assert name not in TOOLS, name
+        assert name in commands(), name
+
+
 def test_irreversible_tools_need_a_card() -> None:
     """直接做的寫入只有可逆的：不可逆一律要人（brief §14）。"""
     registry = commands()
@@ -65,8 +80,6 @@ def test_which_writes_need_a_card() -> None:
     writes = {name for name in TOOLS if registry[name].effect is not Effect.READ}
     assert writes == {
         "downloading.add_manual_download",
-        "rss.subscribe_mikan",
-        "rss.subscribe_search",
         "rss.subscribe",
         "rss.add_feed",
         "rss.delete_feed",

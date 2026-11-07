@@ -94,6 +94,7 @@ const REASONS: ReasonSet<RssRefusal> = {
   bangumi_not_found: true,
   bangumi_without_subgroups: true,
   subgroup_not_found: true,
+  subgroups_not_found: true,
 }
 
 export function isRssRefusal(reason: string): reason is RssRefusal {

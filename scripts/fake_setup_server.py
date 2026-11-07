@@ -2033,6 +2033,13 @@ def agent_scenario() -> Scenario:
     scenario.demo_releases = (*scenario.demo_releases, *AGENT_RELEASES)
     # 兩種訂閱卡讀的頁（票 26）：番組頁、三個字幕組的單一 feed、acg.rip 的搜尋。
     scenario.feed_pages = {
+        # `match_bangumi` 用作品的名字搜 Mikan（M5.6 票 08）：兩個名字都回同一個番組。
+        mikan_search_url("SPY×FAMILY"): SPY_SEARCH_PAGE,
+        mikan_search_url("SPY x FAMILY"): SPY_SEARCH_PAGE,
+        # 退回關鍵字站時 acg.rip 試的前兩個名字（`rss.keyword_terms` 的 CJK 優先順序）。
+        acgrip.search_url("SPY×FAMILY 間諜家家酒"): SPY_ACGRIP,
+        acgrip.search_url("SPY×FAMILY"): SPY_ACGRIP,
+        acgrip.search_url("SPY x FAMILY"): SPY_ACGRIP,
         bangumi_url(SPY_BANGUMI): SPY_BANGUMI_PAGE,
         **{
             bangumi_feed_url(SPY_BANGUMI, group): _spy_feed(
@@ -2265,9 +2272,17 @@ def _spy_feed(titles: list[str], *, mikan: bool) -> bytes:
     return f"{head}{''.join(items)}</channel></rss>".encode()
 
 
-#: SPY×FAMILY 的番組頁：左欄字幕組名與最近更新，右邊每一組一張發佈表（`mikan.subgroups` 讀的形狀）。
+#: Mikan 搜尋頁上的一個番組（`mikan.search_page` 讀的結果格子）：標題是作品的某個名字
+#: （`parser.bangumi.same_work` 比的就是它）。
+SPY_SEARCH_PAGE = (
+    '<ul class="an-ul"><a href="/Home/Bangumi/3310">'
+    '<div class="an-text" title="SPY×FAMILY"></div></a></ul>'
+).encode()
+
+#: SPY×FAMILY 的番組頁：番組名（要對得上作品的名字）、左欄字幕組名與最近更新，右邊每一組一張發佈表
+#: （`mikan.subgroups` 讀的形狀）。沒有「放送开始」：只有這一個候選時 `choose` 照樣給它。
 SPY_BANGUMI_PAGE = (
-    '<p class="bangumi-title">間諜過家家</p>'
+    '<p class="bangumi-title">SPY×FAMILY</p>'
     + "".join(
         f'<a class="subgroup-name subgroup-{group}">{escape(name)}</a>'
         '<span class="date">10/25/2026 12:00</span>'
@@ -2294,16 +2309,13 @@ SPY_ACGRIP = _spy_feed(
     mikan=False,
 )
 
-_SUBSCRIBE_MIKAN = re.compile(
-    r"^(?:從\s*Mikan\s*訂閱|subscribe on mikan:?)\s*(.+?)[。.!！]?$", re.I
-)
-_SUBSCRIBE_ACGRIP = re.compile(
-    r"^(?:在\s*acg\.rip\s*訂閱|subscribe on acg\.rip:?)\s*(.+?)[。.!！]?$", re.I
-)
+#: 「訂閱 SPY×FAMILY」（`subscribe SPY×FAMILY`）：以作品訂閱，模型只說作品與推薦的字幕組
+#: （M5.6 票 09）。推薦的那一組（ToonsHub）只有 acg.rip 有，卡片上兩條路的字幕組都列出來。
+_SUBSCRIBE_WORK = re.compile(r"^(?:再\s*)?(?:訂閱|subscribe)\s*(.+?)[。.!！]?$", re.I)
 
 
 def _subscribed(text: str) -> re.Match[str] | None:
-    return _SUBSCRIBE_MIKAN.search(text.strip()) or _SUBSCRIBE_ACGRIP.search(text.strip())
+    return _SUBSCRIBE_WORK.search(text.strip())
 
 
 _DOWNLOAD_ASKED = re.compile(r"^(?:下載|download)\s*(.+?)[。.!！]?$", re.I)
@@ -2616,38 +2628,19 @@ def _download_step(
 def _subscribe_step(
     question: str, messages: list[ModelMessage], last: ToolReturnPart, *, chinese: bool
 ) -> ModelResponse:
-    """兩種訂閱的下一步（票 26）：搜作品 →（Mikan 讀番組頁）→ 出卡 → 照卡片的結果回答。
-    Route 由伺服器在提出時定（M5.6 票 04）；模型建議的字幕組是 Berth-Demo，卡上由人選。"""
+    """以作品訂閱的下一步（M5.6 票 08、09）：搜作品 → `rss_subscribe` → 出卡 → 照卡片的結果回答。
+    Route 由伺服器在提出時定（票 04）；番組與來源也由伺服器找（票 09），模型只給作品與推薦的字幕組
+    （ToonsHub 只有 acg.rip 有，所以卡片上兩條路的字幕組都列出來）。"""
     # `Any`：工具結果是執行器回的 JSON（`Turn.run_tool`），形狀隨工具，這裡照名字讀。
     result: Any = last.content
-    mikan = _SUBSCRIBE_MIKAN.search(question.strip()) is not None
     if last.outcome == "denied":
         return _say("好，那就不訂。" if chinese else "All right, nothing was subscribed.")
     if last.tool_name == "discover_search_media":
         items = result.get("items") or []
         if not items:
             return _say("找不到這部作品。" if chinese else "I could not find that title.")
-        media_id = items[0]["id"]
-        if mikan:
-            return ModelResponse(
-                parts=[ToolCallPart("bangumi_read_bangumi", {"bangumi_id": SPY_BANGUMI})]
-            )
-        row = {
-            "kind": "acgrip",
-            "term": "SPY×FAMILY",
-            "subgroup": "Berth-Demo",
-            "media_id": media_id,
-        }
-        return ModelResponse(parts=[ToolCallPart("rss_subscribe_search", {"rows": [row]})])
-    if last.tool_name == "bangumi_read_bangumi":
-        media_id = _last_result(messages, "discover_search_media")["items"][0]["id"]
-        row = {
-            "bangumi_id": SPY_BANGUMI,
-            "subgroup_id": 583,
-            "subgroup_name": "Berth-Demo",
-            "media_id": media_id,
-        }
-        return ModelResponse(parts=[ToolCallPart("rss_subscribe_mikan", {"rows": [row]})])
+        row = {"subgroup": "ToonsHub", "media_id": items[0]["id"]}
+        return ModelResponse(parts=[ToolCallPart("rss_subscribe", {"rows": [row]})])
     if isinstance(result, dict) and "refused" in result:
         refused = result["refused"]
         return _say(f"訂不了：`{refused}`。" if chinese else f"Not subscribed: `{refused}`.")

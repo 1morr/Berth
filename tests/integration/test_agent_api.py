@@ -966,8 +966,6 @@ class TestWhoCanUseWhat:
         chat(client, "Hello?")
         assert script.tools[0] == [
             "anilist_read_season",
-            "bangumi_read_bangumi",
-            "bangumi_search_bangumi",
             "bgm_read_calendar",
             "discover_read_trending",
             "discover_search_media",
@@ -981,8 +979,6 @@ class TestWhoCanUseWhat:
             "rss_delete_feed",
             "rss_list_subscriptions",
             "rss_subscribe",
-            "rss_subscribe_mikan",
-            "rss_subscribe_search",
             "search_search_torrents",
             "skills_load_skill",
             "why_not_explain",

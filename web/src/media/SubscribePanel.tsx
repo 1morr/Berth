@@ -393,8 +393,11 @@ function MikanPicker({
  */
 export function SubgroupLine({
   group,
+  source,
 }: {
   group: Pick<Subgroup, 'name' | 'releases' | 'updated' | 'latest'>
+  /** 這一個是哪一個站找到的（M5.6 票 09）：以作品訂閱的卡上兩條路都有，卡片照它標。 */
+  source?: string
 }) {
   const { t, i18n } = useTranslation()
   const updated = group.updated
@@ -405,6 +408,7 @@ export function SubgroupLine({
     <span className="grid min-w-0 gap-0.5">
       <span className="flex flex-wrap items-baseline gap-x-2">
         <span className="value wrap-anywhere">{group.name}</span>
+        {source ? <span className="label text-ink-dim">{source}</span> : null}
         <span className="text-xs text-ink-dim">
           {t('rss.subscribe.releases', { count: group.releases, updated })}
         </span>

@@ -47,7 +47,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import PurePosixPath
-from typing import Annotated, Any, NamedTuple
+from typing import TYPE_CHECKING, Annotated, Any, NamedTuple
 from urllib.parse import urlsplit
 
 from pydantic import Field
@@ -100,6 +100,7 @@ from berth.models import (
 from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
 from berth.parser import series_finished
+from berth.parser.bangumi import names as bangumi_names
 from berth.parser.binding import (
     SeriesClues,
     could_be,
@@ -130,6 +131,10 @@ from berth.services.media import read_snapshot_checked
 from berth.services.plan import guess_from_title
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import message
+
+if TYPE_CHECKING:
+    # `services.bangumi` 匯入本模組（`unread`、拒絕例外）：型別只在這裡拿，執行時那一邊延後匯入。
+    from berth.services.bangumi import BangumiView
 
 logger = logging.getLogger(__name__)
 
@@ -2709,15 +2714,174 @@ async def _can_subscribe(session: AsyncSession, *, media_id: str, route_id: int)
     await _target(session, media_id, route_id)
 
 
+# --- 以作品訂閱：Mikan 找不到就退到關鍵字站（M5.6 票 08、09） ---
+
+
+@dataclass(frozen=True, slots=True)
+class SubscriptionOffer:
+    """以作品訂閱時可以選的一個字幕組，帶著它是哪一個來源找到的（M5.6 票 09）。
+
+    卡片與命令共用這一份：卡片照它畫選項，核准時照選項的 `source` 與 `term` 解回同一條路。
+    """
+
+    kind: FeedKind
+    #: 關鍵字站的搜尋詞；Mikan 是空字串。
+    term: str
+    name: str
+    releases: int
+    updated: date | None
+    latest: str
+    #: 關鍵字訂閱的第一批（新的在前）；Mikan 是空的（整季）。
+    titles: tuple[str, ...]
+    #: Mikan 的字幕組 id；關鍵字站是 `None`。
+    subgroup_id: int | None = None
+    #: 這一組的 RSS Series 已經綁在別的作品上；Mikan 才有。卡片上不列（訂了也是 `series_bound`）。
+    bound_to: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SubscriptionOffers:
+    """一次以作品訂閱時找到的字幕組，照卡片上的順序：Mikan、nyaa、acg.rip。"""
+
+    offers: tuple[SubscriptionOffer, ...]
+
+
+#: 退回關鍵字站時每個站最多試幾個名字：每個名字真的讀一次站上的搜尋頁。
+MAX_KEYWORD_TERMS = 2
+
+
+def keyword_terms(snapshot: MediaSnapshot) -> dict[FeedKind, tuple[str, ...]]:
+    """退回關鍵字來源時，兩個站各拿哪幾個名字搜（M5.6 票 09）。
+
+    acg.rip 的發佈名多數是中文、nyaa 的是原文或英文，所以兩邊從不同的名字開始；名字與 Mikan
+    那一輪同一份（`parser.bangumi.names`：拆掉季名、去重、中文優先），各取前 `MAX_KEYWORD_TERMS`
+    個。第一個有字幕組的名字就夠了，站上沒有才往後試。
+    """
+    return {
+        FeedKind.NYAA: bangumi_names(snapshot, latin_first=True)[:MAX_KEYWORD_TERMS],
+        FeedKind.ACGRIP: bangumi_names(snapshot)[:MAX_KEYWORD_TERMS],
+    }
+
+
+def offer_named(offers: SubscriptionOffers, subgroup: str) -> SubscriptionOffer | None:
+    """卡片預選與核准時解回的那一個：名字正規化後相等（同一套 `normalize_title`）。
+
+    兩條路都有同一個字幕組時取先在卡片上的那一個（Mikan、nyaa、acg.rip 的順序）。
+    """
+    wanted = normalize_title(subgroup)
+    if not wanted:
+        return None
+    return next((offer for offer in offers.offers if normalize_title(offer.name) == wanted), None)
+
+
+def _mikan_offers(view: BangumiView) -> list[SubscriptionOffer]:
+    return [
+        SubscriptionOffer(
+            kind=FeedKind.MIKAN,
+            term="",
+            name=group.name,
+            releases=group.releases,
+            updated=group.updated,
+            latest=group.latest,
+            titles=(),
+            subgroup_id=group.id,
+            bound_to=group.bound_to,
+        )
+        for group in view.subgroups
+    ]
+
+
+async def _keyword_offers(
+    factory: ServiceClientFactory, snapshot: MediaSnapshot
+) -> tuple[list[SubscriptionOffer], int, RssRejectedError | None]:
+    """兩個關鍵字站各試前面幾個名字，第一個有字幕組的名字就夠了。
+
+    回（找到的字幕組、有回應的幾次、第一次讀不到的那一次）。讀不到一次不擋其餘的：站上偶爾一次
+    逾時不該讓整張卡出不來（與 `bangumi._search` 同一個取捨）。
+    """
+    offers: list[SubscriptionOffer] = []
+    answered = 0
+    failure: RssRejectedError | None = None
+    for kind, terms in keyword_terms(snapshot).items():
+        for term in terms:
+            try:
+                found = await search_subgroups(factory, kind=kind, term=term)
+            except RssRejectedError as exc:
+                failure = failure or exc
+                continue
+            answered += 1
+            if found:
+                offers.extend(
+                    SubscriptionOffer(
+                        kind=kind,
+                        term=term,
+                        name=group.name,
+                        releases=group.releases,
+                        updated=group.updated,
+                        latest=group.latest,
+                        titles=group.titles,
+                    )
+                    for group in found
+                )
+                break
+    return offers, answered, failure
+
+
+# 只讀：以作品訂閱時要找哪些來源、各有哪些字幕組，`rss.subscribe` 與確認卡的預覽自己叫它。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def subscription_offers(
+    session: AsyncSession, factory: ServiceClientFactory, media_id: str, subgroup: str
+) -> SubscriptionOffers:
+    """作品 → 訂閱可以選的來源與字幕組（M5.6 票 08、09）。
+
+    先用作品的名字找 Mikan 的番組（`services.bangumi.match_bangumi`）：找到而且有 `subgroup`
+    這個字幕組時就只有它那一頁的選項。找不到番組、番組上沒有這個字幕組時，改問 nyaa 與 acg.rip
+    的關鍵字搜尋，兩條路的字幕組一起列出來——Mikan 那一頁的照樣列（人也可能想改訂別組）。
+
+    **讀不到 Mikan 不退回關鍵字**：分不出「站上沒有」與「暫時讀不到」，模型會照 `feed_unreachable`
+    處理。關鍵字站讀不到的才跳過：至少一個站有回應就是讀得到，一個都沒有才是 `feed_unreachable`；
+    讀得到而一個字幕組都沒有是 `subgroups_not_found`。
+    """
+    # 本模組與 `services.bangumi` 互相 import（那一邊用 `unread` 與拒絕例外），所以延後到呼叫時。
+    from berth.services.bangumi import match_bangumi, subgroup_named
+
+    media = await session.get(Media, media_id)
+    if media is None:
+        raise RssRejectedError(RssRefusal.MEDIA_MISSING, media_id)
+    snapshot = media.snapshot()
+    offers: list[SubscriptionOffer] = []
+    try:
+        view = await match_bangumi(session, factory, media_id)
+    except RssRejectedError as exc:
+        if exc.reason not in (
+            RssRefusal.BANGUMI_NOT_FOUND,
+            RssRefusal.BANGUMI_WITHOUT_SUBGROUPS,
+        ):
+            raise
+    else:
+        offers.extend(_mikan_offers(view))
+        if subgroup_named(view, subgroup) is not None:
+            return SubscriptionOffers(offers=tuple(offers))
+    found, answered, failure = await _keyword_offers(factory, snapshot)
+    offers.extend(found)
+    if not offers:
+        if answered == 0 and failure is not None:
+            raise failure
+        raise RssRejectedError(RssRefusal.SUBGROUPS_NOT_FOUND, snapshot.title)
+    return SubscriptionOffers(offers=tuple(offers))
+
+
 @command(
     Effect.REVERSIBLE,
     flags={Flag.DOWNLOADS},
     about=(
-        "Subscribe a work to Mikan: give the work's id and the subgroup you recommend. Berth "
-        "finds the bangumi by the work's titles and premiere date; the card lists the "
-        "subgroups it has and the user picks one. Reads the whole season, downloads what is "
-        "out and keeps downloading new episodes into the route. Use it for works Mikan "
-        "carries; when Berth finds no bangumi it refuses and says why."
+        "Subscribe a work: give the work's id and the subgroup you recommend. Berth finds the "
+        "bangumi on Mikan by the work's titles and premiere date; when Mikan has no bangumi for "
+        "the work, or none of its subgroups is the one you named, Berth also searches nyaa and "
+        "acg.rip by keyword. The card lists every subgroup it found with its source (Mikan, "
+        "nyaa, acgrip) and the user picks one. It reads the whole season from Mikan, or the "
+        "first batch from a keyword search, downloads what is out and keeps downloading new "
+        "episodes into the route. When no source has a subgroup it refuses and says why."
     ),
     refusals=(RssRefusal,),
     validate=_can_subscribe,
@@ -2731,17 +2895,45 @@ async def subscribe(
     route_id: int,
     user_id: int | None,
     actor: str,
+    kind: FeedKind | None = None,
+    term: str = "",
+    first_batch: PrimeMode = PrimeMode.ALL,
     now: datetime | None = None,
-) -> Subscription:
-    """以作品訂閱 Mikan（M5.6 票 08）：模型只說要訂哪部、要哪個字幕組。
+) -> Subscription | FeedView:
+    """以作品訂閱（M5.6 票 08、09）：模型只說要訂哪部、要哪個字幕組。
 
-    「用作品的名字搜、用開播日挑番組」在 `services.bangumi.match_bangumi`
-    （規則本身是純函式 `parser.bangumi`，這張票之前寫在 skill 裡）。挑到番組之後走的就是
-    `subscribe_mikan` 的那一支 `_subscribe`：同一條單一 feed、同一個 RSS Series、同一套補舊集。
+    「用作品的名字搜、用開播日挑番組」在 `services.bangumi.match_bangumi`（規則本身是純函式
+    `parser.bangumi`）。找到番組就走 `subscribe_mikan` 的那一支 `_subscribe`：同一條單一 feed、
+    同一個 RSS Series、同一套補舊集。Mikan 沒有這個字幕組時退回關鍵字站（票 09），走
+    `subscribe_search` 的同一支：一個字幕組一條搜尋 feed，第一批照卡上列出的送出。
 
-    `subgroup` 是番組頁上的名字。卡片上人改選的字幕組蓋掉的也是這一格，所以核准之後照樣從這裡解；
-    Mikan 上沒有那一組是 `subgroup_not_found`。
+    `subgroup` 是番組頁或發佈名上的字幕組名。卡片上人改選的那一個與它來自哪一個站、哪一個搜尋詞
+    蓋掉的都是這幾格，所以核准之後照樣從這裡解；`kind` 沒給（模型那一條）時伺服器自己找
+    （`subscription_offers`）。Mikan 上沒有那一組是 `subgroup_not_found`。
+
+    `kind`、`term`、`first_batch` 都不在給模型的卡片列裡（`agent.WorkSubscriptionRow`）：來源與
+    搜尋詞由伺服器找，第一輪由人在卡上選（關鍵字那條路才看得到它，Mikan 一律整季）。
     """
+    if kind is None or (kind is not FeedKind.MIKAN and not term.strip()):
+        offers = await subscription_offers(session, factory, media_id, subgroup)
+        offer = offer_named(offers, subgroup)
+        if offer is None:
+            raise RssRejectedError(RssRefusal.SUBGROUP_NOT_FOUND, subgroup)
+        kind, term = offer.kind, offer.term
+    moment = now or utcnow()
+    if kind is not FeedKind.MIKAN:
+        return await subscribe_search(
+            session,
+            factory,
+            kind=kind,
+            term=term,
+            media_id=media_id,
+            route_id=route_id,
+            subgroup=subgroup,
+            user_id=user_id,
+            first_batch=first_batch,
+            now=moment,
+        )
     # 本模組與 `services.bangumi` 互相 import（那一邊用 `unread` 與拒絕例外），所以延後到呼叫時。
     from berth.services.bangumi import match_bangumi, subgroup_named
 
@@ -2749,7 +2941,6 @@ async def subscribe(
     group = subgroup_named(view, subgroup)
     if group is None:
         raise RssRejectedError(RssRefusal.SUBGROUP_NOT_FOUND, subgroup)
-    moment = now or utcnow()
     async with download_round(session, presser=user_id, now=moment) as batch:
         return await _subscribe(
             session,

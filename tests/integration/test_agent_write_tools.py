@@ -30,14 +30,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
-from berth.adapters.rss import acgrip, mikan
+from berth.adapters.rss import acgrip, mikan, nyaa
 from berth.adapters.websearch import WebPage
 from berth.config import Config
-from berth.domain import CollectionType, FeedKind
-from berth.models import DiskSettings, Media, Route, RssFeed, RssSeries
+from berth.domain import CollectionType
+from berth.models import DiskSettings, Media, Route, RssSeries
 from berth.services.jobs import JobSource
 from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
+from tests.conftest import FIXTURES
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_agent_api import BROWSER, KEY, Script, Step, call, chat, recorded, say
 from tests.integration.test_agent_cards import (
@@ -59,7 +60,7 @@ from tests.integration.test_agent_cards import (
 from tests.integration.test_media import SPY_ID
 from tests.integration.test_rss_screen import mikan_feed
 from tests.integration.test_rss_screen import release as synthetic
-from tests.integration.test_rss_subscribe import ACGRIP_FEED, TERM
+from tests.integration.test_rss_subscribe_work import keyword_feed
 
 URL = "https://mikanani.me/RSS/MyBangumi?token=m5prototype"
 
@@ -184,44 +185,32 @@ class TestIdsComeFromToolResults:
         """M5.6 票 04：Route 不再由模型給。多了 `route_id` 的那一列連卡都不出，模型拿到參數錯。"""
         seen_work(client)
         script.steps = [
-            tool("rss_subscribe_search", rows=[keyword_row() | {"route_id": 3}]),
+            tool(
+                "rss_subscribe",
+                rows=[{"media_id": SPY_ID, "subgroup": "ANi", "route_id": 3}],
+            ),
             say("The route is Berth's to pick."),
         ]
 
-        chat(client, "Subscribe SPY×FAMILY on nyaa.")
+        chat(client, "Subscribe SPY×FAMILY.")
 
         assert "route_id" in json.dumps(refusal(script), ensure_ascii=False)
         assert cards(client) == []
         assert feeds(client) == []
         assert [t.outcome for t in recorded(client)[-1].tools] == ["failed"]
 
-    def test_a_mikan_subgroup_the_model_made_up_gets_no_card(
-        self, client: TestClient, script: Script
-    ) -> None:
-        seen_work(client)
-        looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
-        row = {"bangumi_id": 3310, "subgroup_id": 999, "media_id": SPY_ID}
-        script.steps = [tool("rss_subscribe_mikan", rows=[row]), say("Let me read the groups.")]
-
-        chat(client, "Subscribe it from Mikan.")
-
-        assert refusal(script)["refused"] == "id_not_from_results"
-        assert "subgroup_id=999" in refusal(script)["detail"]
-        assert cards(client) == []
-
     def test_ids_from_tool_results_make_a_card(
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
         seen_work(client)
-        looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
         bangumi(factory, {583: 12})
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
-        script.steps = [tool("rss_subscribe_mikan", rows=[row])]
+        searching(factory, (3310, "间谍过家家"))
+        script.steps = [tool("rss_subscribe", rows=[{"media_id": SPY_ID, "subgroup": "Group 583"}])]
 
         chat(client, "Subscribe it from Mikan.")
 
         [proposal] = cards(client)
-        assert proposal["command"] == "rss.subscribe_mikan"
+        assert proposal["command"] == "rss.subscribe"
         assert proposal["preview"]["flags"] == ["downloads"]
 
 
@@ -267,28 +256,12 @@ def searching(factory: FakeClientFactory, *hits: tuple[int, str], term: str = "�
     factory.rss_.pages[mikan.search_url(term)] = f'<ul class="an-ul">{cells}</ul>'.encode()
 
 
-def keyword_row(subgroup: str = "ANi") -> dict[str, object]:
-    """關鍵字訂閱卡的一列（票 26）：《与你相恋》的 acg.rip 搜尋，模型建議 `subgroup`。"""
-    return {
-        "kind": "acgrip",
-        "term": TERM,
-        "subgroup": subgroup,
-        "media_id": SPY_ID,
-    }
-
-
-def serve_search(factory: FakeClientFactory) -> None:
-    factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
-
-
 class TestWhatACardSends:
     """按卡的人要知道自己要送多少（協調者 2026-10-27）：訂閱 Mikan 按下去就當場送整季。"""
 
     def subscribe(self, client: TestClient, script: Script) -> dict[str, Any]:
         seen_work(client)
-        looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
-        script.steps = [tool("rss_subscribe_mikan", rows=[row])]
+        script.steps = [tool("rss_subscribe", rows=[{"media_id": SPY_ID, "subgroup": "Group 583"}])]
         chat(client, "Subscribe it from Mikan.")
         [proposal] = cards(client)
         return proposal
@@ -297,6 +270,7 @@ class TestWhatACardSends:
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
         bangumi(factory, {583: 12})
+        searching(factory, (3310, "间谍过家家"))
 
         proposal = self.subscribe(client, script)
 
@@ -310,19 +284,21 @@ class TestWhatACardSends:
     ) -> None:
         """票 26：卡上可以改選字幕組，所以數量閘看的是選項裡最多的那一個。"""
         bangumi(factory, {583: 12, 584: 15})
+        searching(factory, (3310, "间谍过家家"))
 
         proposal = self.subscribe(client, script)
 
         assert proposal["preview"]["torrents"] == [15]
 
-    def test_a_bangumi_page_that_cannot_be_read_gets_no_card(
+    def test_no_source_that_can_be_read_gets_no_card(
         self, client: TestClient, script: Script
     ) -> None:
         """字幕組要人選，番組頁讀不到就列不出選項：不出卡，把理由交給模型。"""
         seen_work(client)
-        looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
-        script.steps = [tool("rss_subscribe_mikan", rows=[row]), say("Mikan is down.")]
+        script.steps = [
+            tool("rss_subscribe", rows=[{"media_id": SPY_ID, "subgroup": "Group 583"}]),
+            say("Nobody carries it."),
+        ]
 
         chat(client, "Subscribe it from Mikan.")
 
@@ -391,21 +367,27 @@ class TestExternalContent:
     ) -> None:
         seen_work(client)
         with_tavily(client, factory, PAGE)
-        factory.rss_.pages[acgrip.search_url("SPY x FAMILY Code White")] = ACGRIP_FEED
-        row = keyword_row() | {"term": "SPY x FAMILY Code White"}
+        no_mikan_bangumi(factory)
+        factory.rss_.pages[nyaa.search_url("SPY x FAMILY")] = keyword_feed(
+            [("[Erai-raws] SPY×FAMILY - 12 [1080P][ENG]", "Fri, 18 Sep 2026 04:00:00")]
+        )
         script.steps = [
             call("web_tavily_search", query="SPY FAMILY movie fansub name"),
-            tool("rss_subscribe_search", "s1", rows=[row]),
+            tool(
+                "rss_subscribe",
+                "s1",
+                rows=[{"media_id": SPY_ID, "subgroup": "Erai-raws"}],
+            ),
             say("Subscribed."),
         ]
 
-        chat(client, "Subscribe the SPY×FAMILY film on nyaa, under whatever name fansubs use.")
+        chat(client, "Subscribe the SPY×FAMILY film, whatever name the fansubs use.")
 
         assert feeds(client) == []
         [proposal] = cards(client)
-        assert proposal["command"] == "rss.subscribe_search"
+        assert proposal["command"] == "rss.subscribe"
         assert proposal["tool_call_id"] == "s1"
-        assert proposal["preview"]["external_fields"] == [["term"]]
+        assert proposal["preview"]["external_fields"] == [["subgroup"]]
 
         pressed = decide(client, proposal["id"], approve=True)
         response = resume(client, tool_call_id="s1")
@@ -467,10 +449,9 @@ class TestRefusedBeforeACard:
     ) -> None:
         """Route 由伺服器從作品那一種挑（M5.6 票 04）：電影的 Route 不會出現在清單裡。"""
         _, movies = seen_work(client)
-        looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
         bangumi(factory, {583: 12})
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
-        script.steps = [tool("rss_subscribe_mikan", rows=[row])]
+        searching(factory, (3310, "间谍过家家"))
+        script.steps = [tool("rss_subscribe", rows=[{"media_id": SPY_ID, "subgroup": "Group 583"}])]
 
         chat(client, "Subscribe it from Mikan.")
 
@@ -559,130 +540,31 @@ def _incomplete_root(roots: dict[str, Path]) -> Iterator[None]:
     yield
 
 
-class TestTorrentsOnOneCard:
-    """數量閘數的是 torrent（協調者 2026-10-27）：一張卡的總數最多 13（送單一列 1 個，Mikan 訂閱照
-    番組頁的集數）；單獨就超過 13 的一列、集數不知道的一列，自己一張。超出的退回給模型拆下一張。"""
-
-    def propose(
-        self,
-        client: TestClient,
-        script: Script,
-        factory: FakeClientFactory,
-        sizes: list[int | None],
-    ) -> dict[str, Any]:
-        """一列一個番組（3310 起），各一個字幕組 583、`sizes` 集；`None` 是番組頁上沒有字幕組。"""
-        seen_work(client)
-        ids = [3310 + index for index in range(len(sizes))]
-        for bangumi_id, size in zip(ids, sizes, strict=True):
-            bangumi(factory, {} if size is None else {583: size}, bangumi_id)
-            looked_up(
-                client, {"id": bangumi_id, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi"
-            )
-        script.steps = [
-            tool(
-                "rss_subscribe_mikan",
-                rows=[
-                    {
-                        "bangumi_id": bangumi_id,
-                        "subgroup_id": 583,
-                        "media_id": SPY_ID,
-                    }
-                    for bangumi_id in ids
-                ],
-            )
-        ]
-        chat(client, "Subscribe these from Mikan.")
-        [proposal] = cards(client)
-        return proposal
-
-    def test_two_twelve_episode_seasons_do_not_share_a_card(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        proposal = self.propose(client, script, factory, [12, 12])
-
-        assert [row["bangumi_id"] for row in proposal["arguments"]] == [3310]
-        assert proposal["preview"]["torrents"] == [12]
-        assert proposal["preview"]["held_back"] == 1
-
-    def test_a_season_over_the_limit_goes_on_a_card_alone(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        proposal = self.propose(client, script, factory, [24])
-
-        assert proposal["preview"]["torrents"] == [24]
-        assert proposal["preview"]["held_back"] == 0
-
-    def test_a_season_over_the_limit_does_not_join_another_row(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        proposal = self.propose(client, script, factory, [1, 24])
-
-        assert proposal["preview"]["torrents"] == [1]
-        assert proposal["preview"]["held_back"] == 1
-
-    def test_an_unknown_season_goes_alone(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        # 番組頁上沒有字幕組：數量要送出時才知道，當成超過。
-        proposal = self.propose(client, script, factory, [None])
-
-        assert proposal["preview"]["torrents"] == [None]
-        assert proposal["preview"]["held_back"] == 0
-
-    @pytest.mark.parametrize(("sizes", "kept"), [([None, 1], [3310]), ([1, None], [3310])])
-    def test_an_unknown_season_does_not_share_a_card(
-        self,
-        client: TestClient,
-        script: Script,
-        factory: FakeClientFactory,
-        sizes: list[int | None],
-        kept: list[int],
-    ) -> None:
-        proposal = self.propose(client, script, factory, sizes)
-
-        assert [row["bangumi_id"] for row in proposal["arguments"]] == kept
-        assert proposal["preview"]["held_back"] == 1
+#: SPY×FAMILY 在 Mikan 搜尋時試的幾個名字（`parser.bangumi.names` 的順序）。
+SPY_NAMES = ("间谍过家家", "SPY×FAMILY 間諜家家酒", "SPY×FAMILY", "SPY x FAMILY")
+#: 退回關鍵字站時 acg.rip 試的第一個名字（中文優先，`rss.keyword_terms`）。
+SPY_ACGRIP_TERM = "间谍过家家"
+#: 一次 acg.rip 搜尋上的字幕組：ANi 兩筆，另外兩組各一筆。
+KEYWORD_FEED = keyword_feed(
+    [
+        ("[ANi] SPY×FAMILY - 12 [1080P][CHT]", "Fri, 18 Sep 2026 04:00:00"),
+        ("[ANi] SPY×FAMILY - 11 [1080P][CHT]", "Fri, 11 Sep 2026 04:00:00"),
+        ("[黒ネズミたち] SPY×FAMILY - 12 [1080P][CHT]", "Fri, 18 Sep 2026 05:00:00"),
+        ("[北宇治字幕组] SPY×FAMILY - 12 [1080P][CHT]", "Fri, 18 Sep 2026 06:00:00"),
+    ]
+)
 
 
-# ---------------------------------------------------------------- 關鍵字訂閱的 Route（票 23b）
+def no_mikan_bangumi(factory: FakeClientFactory) -> None:
+    """Mikan 的每一次搜尋都回空頁：這部作品在 Mikan 上沒有番組（M5.6 票 09 的退回條件之一）。"""
+    empty = (FIXTURES / "http" / "mikan" / "home-search.none.html").read_bytes()
+    for term in SPY_NAMES:
+        factory.rss_.pages[mikan.search_url(term)] = empty
 
 
-class TestTheRouteIsAskedOnACard:
-    """多條可用 Route 就一定問（使用者，票 23b）：關鍵字訂閱（票 26 起一律出卡）在作品放得進的 Route
-    不只一條時，卡上照送單卡的規則選 Route。"""
-
-    def test_with_two_routes_and_no_default_the_card_asks_for_the_route(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        tv, _ = seen_work(client)
-        serve_search(factory)
-        script.steps = [tool("rss_subscribe_search", "s1", rows=[keyword_row()]), say("Done.")]
-
-        chat(client, "Subscribe it on acg.rip.")
-
-        assert feeds(client) == []
-        [proposal] = cards(client)
-        assert proposal["command"] == "rss.subscribe_search"
-        assert proposal["preview"]["external_fields"] == [[]]
-        [ask] = proposal["preview"]["routes"]
-        assert sorted(option["id"] for option in ask["options"]) == sorted(tv_routes(client))
-        assert ask["preselected"] is None
-        assert [t.outcome for t in recorded(client)[-1].tools] == ["proposed"]
-
-        other = next(route for route in tv_routes(client) if route != tv)
-        # 沒選 Route 按不下去（`routes=None`：不讓測試的 `decide` 替人選）。
-        assert decide(client, proposal["id"], approve=True, routes=None).status_code == 422
-        pressed = decide(client, proposal["id"], approve=True, routes=[other])
-        response = resume(client, tool_call_id="s1")
-
-        assert pressed.json()["status"] == "executed", pressed.text
-        assert response.status_code == 200, response.text
-        [feed] = feeds(client)
-        # 送進卡片上選的那一條，不是模型給的。
-        assert feed["tv_route_id"] == other
-
-
-# ---------------------------------------------------------------- 字幕組（票 26）
+def serve_keyword_search(factory: FakeClientFactory) -> None:
+    """acg.rip 上這一部作品的字幕組（M5.6 票 09：Mikan 沒有時伺服器自己改問它）。"""
+    factory.rss_.pages[acgrip.search_url(SPY_ACGRIP_TERM)] = KEYWORD_FEED
 
 
 def subscribed_series(client: TestClient) -> list[tuple[str, str | None, bool]]:
@@ -695,75 +577,118 @@ def subscribed_series(client: TestClient) -> list[tuple[str, str | None, bool]]:
     return in_db(client, read)
 
 
-class TestTheMikanSubgroupIsPickedOnTheCard:
-    """試用機上助理在 Mikan 自己挑了 ANi（2026-10-28）：番組頁上的字幕組都是卡上的選項，模型給的只是
-    預選，伺服器只收清單裡的。"""
+class TestTorrentsOnOneCard:
+    """數量閘數的是 torrent（協調者 2026-10-27）：一張卡的總數最多 13（送單一列 1 個，訂閱照番組頁
+    的集數）；單獨就超過 13 的一列、集數不知道的一列，自己一張。超出的退回給模型拆下一張。
+
+    M5.6 票 09 起訂閱只有一支工具（`rss.subscribe`）：一列的筆數是它選項裡最多的那一個。"""
 
     def propose(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
+        self,
+        client: TestClient,
+        script: Script,
+        factory: FakeClientFactory,
+        *,
+        rows: int,
+        episodes: int,
     ) -> dict[str, Any]:
-        tv, _ = seen_work(client)
-        used_before(client, tv)
-        looked_up(
-            client,
-            {"id": 3310, "subgroups": [{"id": 583}, {"id": 584}]},
-            tool="bangumi_read_bangumi",
-        )
-        bangumi(factory, {583: 12, 584: 3})
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
-        script.steps = [tool("rss_subscribe_mikan", "m1", rows=[row]), say("Subscribed.")]
+        seen_work(client)
+        bangumi(factory, {583: episodes})
+        searching(factory, (3310, "间谍过家家"))
+        row = {"media_id": SPY_ID, "subgroup": "Group 583"}
+        script.steps = [tool("rss_subscribe", rows=[row] * rows)]
         chat(client, "Subscribe it from Mikan.")
         [proposal] = cards(client)
         return proposal
 
-    def test_the_card_lists_the_pages_subgroups_with_the_models_pick_preselected(
+    def test_two_twelve_episode_subscriptions_do_not_share_a_card(
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
-        proposal = self.propose(client, script, factory)
+        proposal = self.propose(client, script, factory, rows=2, episodes=12)
 
-        [ask] = proposal["preview"]["subgroups"]
-        assert ask["required"] is True
-        assert ask["preselected"] == "583"
-        assert [(o["key"], o["name"], o["releases"]) for o in ask["options"]] == [
-            ("583", "Group 583", 12),
-            ("584", "Group 584", 3),
+        assert len(proposal["arguments"]) == 1
+        assert proposal["preview"]["torrents"] == [12]
+        assert proposal["preview"]["held_back"] == 1
+
+    def test_a_season_over_the_limit_goes_on_a_card_alone(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        proposal = self.propose(client, script, factory, rows=1, episodes=24)
+
+        assert proposal["preview"]["torrents"] == [24]
+        assert proposal["preview"]["held_back"] == 0
+
+    def test_an_unknown_count_goes_alone(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        """番組頁上那一組已經綁在這部作品上：沒有可選的選項，數量要送出時才知道，當成超過。"""
+        seen_work(client)
+        bangumi(factory, {583: 12})
+        searching(factory, (3310, "间谍过家家"))
+
+        async def bound(session: AsyncSession) -> None:
+            session.add(
+                RssSeries(
+                    key="mikan:3310:583",
+                    title_raw="[Group 583] SPY×FAMILY - 01",
+                    mikan_bangumi_id=3310,
+                    mikan_subgroup_id=583,
+                    media_id=SPY_ID,
+                )
+            )
+            await session.commit()
+
+        in_db(client, bound)
+        script.steps = [tool("rss_subscribe", rows=[{"media_id": SPY_ID, "subgroup": "Group 583"}])]
+        chat(client, "Subscribe it from Mikan.")
+        [proposal] = cards(client)
+
+        assert proposal["preview"]["torrents"] == [None]
+        assert proposal["preview"]["held_back"] == 0
+
+
+# ---------------------------------------------------------------- 訂閱的 Route（票 23b）
+
+
+class TestTheRouteIsAskedOnACard:
+    """多條可用 Route 就一定問（使用者，票 23b）：訂閱（票 26 起一律出卡）在作品放得進的 Route
+    不只一條時，卡上照送單卡的規則選 Route。"""
+
+    def test_with_two_routes_and_no_default_the_card_asks_for_the_route(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        tv, _ = seen_work(client)
+        bangumi(factory, {583: 12})
+        searching(factory, (3310, "间谍过家家"))
+        script.steps = [
+            tool("rss_subscribe", "s1", rows=[{"media_id": SPY_ID, "subgroup": "Group 583"}]),
+            say("Done."),
         ]
-        assert ask["options"][0]["latest"] == "[Group 583] SPY×FAMILY - 12"
 
-    def test_it_cannot_be_confirmed_without_a_pick(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        proposal = self.propose(client, script, factory)
+        chat(client, "Subscribe it from Mikan.")
 
-        pressed = decide(client, proposal["id"], approve=True, subgroups=None)
-
-        assert pressed.status_code == 422
-        assert pressed.json()["detail"]["reason"] == "subgroup_required"
         assert feeds(client) == []
+        [proposal] = cards(client)
+        assert proposal["command"] == "rss.subscribe"
+        assert proposal["preview"]["external_fields"] == [[]]
+        [ask] = proposal["preview"]["routes"]
+        assert sorted(option["id"] for option in ask["options"]) == sorted(tv_routes(client))
+        assert ask["preselected"] is None
+        assert [t.outcome for t in recorded(client)[-1].tools] == ["proposed"]
 
-    def test_the_subgroup_picked_on_the_card_is_the_one_subscribed(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        season(factory, 3, 584)
-        proposal = self.propose(client, script, factory)
-
-        pressed = decide(client, proposal["id"], approve=True, subgroups=["584"])
-        resume(client, tool_call_id="m1")
+        other = next(route for route in tv_routes(client) if route != tv)
+        # 沒選 Route 按不下去（`routes=None`：不讓測試的 `decide` 替人選）。
+        assert decide(client, proposal["id"], approve=True, routes=None).status_code == 422
+        season(factory, 12)
+        pressed = decide(client, proposal["id"], approve=True, routes=[other])
+        response = resume(client, tool_call_id="s1")
 
         assert pressed.json()["status"] == "executed", pressed.text
-        [feed] = feeds(client)
-        assert feed["url"] == mikan.bangumi_feed_url(3310, 584)
-        assert [key for key, _, _ in subscribed_series(client)] == ["mikan:3310:584"]
-        [row] = outcome_of_call(script, "m1")["rows"]
-        assert row["subgroup_chosen_on_card"] == "Group 584"
+        assert response.status_code == 200, response.text
 
 
-class TestSubscribingAWorkOnMikan:
-    """M5.6 票 08：模型只給作品與推薦的字幕組，伺服器自己用作品的名字搜、用開播日挑番組。
-
-    這張票之前是 `bangumi.search_bangumi` + `bangumi.read_bangumi` + `rss.subscribe_mikan` 三步，
-    挑哪一個番組的判斷寫在 skill 裡。舊的工具這一張票還留著（票 09 拿掉）。
-    """
+class TestSubscribingAWorkByKeyword:
+    """M5.6 票 09：Mikan 沒有番組時，伺服器自己改問 nyaa 與 acg.rip；卡片列出字幕組與來源。"""
 
     def propose(
         self,
@@ -774,106 +699,13 @@ class TestSubscribingAWorkOnMikan:
     ) -> dict[str, Any]:
         tv, _ = seen_work(client)
         used_before(client, tv)
-        bangumi(factory, {583: 12, 584: 3})
-        searching(factory, (3310, "间谍过家家"))
+        no_mikan_bangumi(factory)
+        serve_keyword_search(factory)
         script.steps = [
-            tool("rss_subscribe", "s1", rows=[{"media_id": SPY_ID, "subgroup": subgroup}]),
+            tool("rss_subscribe", "k1", rows=[{"media_id": SPY_ID, "subgroup": subgroup}]),
             say("Subscribed."),
         ]
-        chat(client, "Subscribe it on Mikan.")
-        [proposal] = cards(client)
-        return proposal
-
-    def test_the_card_lists_the_bangumis_subgroups_with_the_recommended_one_preselected(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        proposal = self.propose(client, script, factory, subgroup="Group 583")
-
-        assert proposal["command"] == "rss.subscribe"
-        assert proposal["preview"]["flags"] == ["downloads"]
-        [ask] = proposal["preview"]["subgroups"]
-        assert ask["preselected"] == "583"
-        assert [
-            (option["key"], option["name"], option["releases"]) for option in ask["options"]
-        ] == [
-            ("583", "Group 583", 12),
-            ("584", "Group 584", 3),
-        ]
-        assert proposal["preview"]["torrents"] == [12]
-
-    def test_the_subgroup_picked_on_the_card_is_the_one_subscribed(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        proposal = self.propose(client, script, factory)
-        season(factory, 3, 584)
-
-        pressed = decide(client, proposal["id"], approve=True, subgroups=["584"])
-        resume(client, tool_call_id="s1")
-
-        assert pressed.json()["status"] == "executed", pressed.text
-        [feed] = feeds(client)
-        assert feed["url"] == mikan.bangumi_feed_url(3310, 584)
-        assert [key for key, _, _ in subscribed_series(client)] == ["mikan:3310:584"]
-
-    def test_the_card_says_what_the_work_already_has(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        """驗收 2 的「現有訂閱」照舊（M5 票 26）：訂閱之前說出來，由人決定留不留。"""
-
-        async def old_feed(session: AsyncSession) -> None:
-            session.add(
-                RssFeed(
-                    name="old",
-                    url="https://nyaa.si/?page=rss&q=old",
-                    kind=FeedKind.NYAA,
-                    media_id=SPY_ID,
-                    subgroup="ANi",
-                )
-            )
-            await session.commit()
-
-        in_db(client, old_feed)
-
-        proposal = self.propose(client, script, factory)
-
-        [existing] = proposal["preview"]["existing"]
-        assert [(ref["name"], ref["kind"], ref["subgroup"]) for ref in existing] == [
-            ("old", "nyaa", "ANi")
-        ]
-
-    def test_no_bangumi_on_mikan_is_refused_before_a_card(
-        self, client: TestClient, script: Script, factory: FakeClientFactory
-    ) -> None:
-        """找不到番組：理由交給模型（退回關鍵字來源是票 09）。"""
-        seen_work(client)
-        searching(factory)
-        script.steps = [
-            tool("rss_subscribe", "s1", rows=[{"media_id": SPY_ID, "subgroup": "ANi"}]),
-            say("Mikan does not carry it."),
-        ]
-
-        chat(client, "Subscribe it on Mikan.")
-
-        assert refusal(script)["refused"] == "bangumi_not_found"
-        assert cards(client) == []
-        assert feeds(client) == []
-
-
-class TestAKeywordSubscriptionIsACard:
-    """關鍵字訂閱只綁一個字幕組、第一批在卡上確認（票 26）。試用機上它直接建，把搜到的每一個字幕組
-    都綁上作品，各等第一批確認，使用者沒選過。"""
-
-    def propose(
-        self, client: TestClient, script: Script, factory: FakeClientFactory, subgroup: str = "ANi"
-    ) -> dict[str, Any]:
-        tv, _ = seen_work(client)
-        used_before(client, tv)
-        serve_search(factory)
-        script.steps = [
-            tool("rss_subscribe_search", "k1", rows=[keyword_row(subgroup)]),
-            say("Subscribed."),
-        ]
-        chat(client, "Subscribe it on acg.rip.")
+        chat(client, "Subscribe it.")
         [proposal] = cards(client)
         return proposal
 
@@ -882,22 +714,24 @@ class TestAKeywordSubscriptionIsACard:
     ) -> None:
         proposal = self.propose(client, script, factory)
 
-        assert proposal["command"] == "rss.subscribe_search"
+        assert proposal["command"] == "rss.subscribe"
         assert proposal["preview"]["flags"] == ["downloads"]
         assert feeds(client) == []
         assert sent(factory) == []
         assert [t.outcome for t in recorded(client)[-1].tools] == ["proposed"]
 
-    def test_the_card_lists_every_subgroup_and_its_first_batch(
+    def test_the_card_lists_every_subgroup_with_its_source_and_first_batch(
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
         proposal = self.propose(client, script, factory)
 
         [ask] = proposal["preview"]["subgroups"]
         assert ask["required"] is True
-        assert ask["preselected"] == "ANi"
+        assert ask["preselected"] == "acgrip:ANi"
         by_name = {option["name"]: option for option in ask["options"]}
         assert {"ANi", "黒ネズミたち", "北宇治字幕组"} <= set(by_name)
+        assert {option["kind"] for option in ask["options"]} == {"acgrip"}
+        assert {option["term"] for option in ask["options"]} == {SPY_ACGRIP_TERM}
         assert by_name["ANi"]["titles"] == [
             title for title in by_name["ANi"]["titles"] if title.startswith("[ANi]")
         ]
@@ -915,40 +749,50 @@ class TestAKeywordSubscriptionIsACard:
             if option["name"] == "黒ネズミたち"
         )
 
-        pressed = decide(client, proposal["id"], approve=True, subgroups=["黒ネズミたち"])
+        pressed = decide(
+            client,
+            proposal["id"],
+            approve=True,
+            subgroups=["acgrip:黒ネズミたち"],
+            first_batch=["all"],
+        )
         resume(client, tool_call_id="k1")
 
         assert pressed.json()["status"] == "executed", pressed.text
         [feed] = feeds(client)
+        assert feed["url"] == acgrip.search_url(SPY_ACGRIP_TERM)
         assert feed["primed_at"] is not None
-        assert subscribed_series(client) == [
-            ("title:kimigashinumadekoiwoshitai:黒ネズミたち", SPY_ID, True)
-        ]
-        # 這一組的 5 筆都送了（替身的 `.torrent` 各一個 hash 以外都是同一個，去重之後至少一筆）。
+        assert subscribed_series(client) == [("title:spyfamily:黒ネズミたち", SPY_ID, True)]
+        # 這一組的每一筆都送了（替身的 `.torrent` 同一個 hash，去重之後至少一筆）。
         assert sent(factory)
         items = client.get(f"/api/rss/feeds/{feed['id']}/preview").json()
         assert sorted(item["title"] for item in items) == sorted(mouse["titles"])
         [row] = outcome_of_call(script, "k1")["rows"]
         assert row["subgroup_chosen_on_card"] == "黒ネズミたち"
+        # 關鍵字那一條的第一輪由人在卡上選（這一條照預設，下載列出的並追之後的）。
+        assert row["first_batch_chosen_on_card"] == "all"
 
-    def test_a_search_that_cannot_be_read_gets_no_card(
-        self, client: TestClient, script: Script
+    def test_a_source_that_cannot_be_read_gets_no_card(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
         tv, _ = seen_work(client)
         used_before(client, tv)
-        script.steps = [tool("rss_subscribe_search", rows=[keyword_row()]), say("Down.")]
+        no_mikan_bangumi(factory)
+        script.steps = [
+            tool("rss_subscribe", rows=[{"media_id": SPY_ID, "subgroup": "ANi"}]),
+            say("Down."),
+        ]
 
-        chat(client, "Subscribe it on acg.rip.")
+        chat(client, "Subscribe it.")
 
         assert cards(client) == []
         assert refusal(script)["refused"] == "feed_unreachable"
 
     def test_the_model_must_name_a_subgroup(self, client: TestClient, script: Script) -> None:
         seen_work(client)
-        row = {k: v for k, v in keyword_row().items() if k != "subgroup"}
-        script.steps = [tool("rss_subscribe_search", rows=[row]), say("Which subgroup?")]
+        script.steps = [tool("rss_subscribe", rows=[{"media_id": SPY_ID}]), say("Which?")]
 
-        chat(client, "Subscribe it on acg.rip.")
+        chat(client, "Subscribe it.")
 
         assert cards(client) == []
         assert "subgroup" in json.dumps(refusal(script), ensure_ascii=False)
@@ -963,22 +807,28 @@ class TestExistingSubscriptionsAreSaid:
     ) -> None:
         tv, _ = seen_work(client)
         used_before(client, tv)
-        serve_search(factory)
-        script.steps = [tool("rss_subscribe_search", "k1", rows=[keyword_row()]), say("Done.")]
-        chat(client, "Subscribe it on acg.rip.")
+        no_mikan_bangumi(factory)
+        serve_keyword_search(factory)
+        script.steps = [
+            tool("rss_subscribe", "k1", rows=[{"media_id": SPY_ID, "subgroup": "ANi"}]),
+            say("Done."),
+        ]
+        chat(client, "Subscribe it.")
         [first] = cards(client)
-        decide(client, first["id"], approve=True)
+        decide(client, first["id"], approve=True, subgroups=["acgrip:ANi"])
         resume(client, tool_call_id="k1")
         [feed] = feeds(client)
 
-        looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
         bangumi(factory, {583: 12})
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
-        script.steps = [tool("rss_subscribe_mikan", "m1", rows=[row]), say("Done.")]
+        searching(factory, (3310, "间谍过家家"))
+        script.steps = [
+            tool("rss_subscribe", "m1", rows=[{"media_id": SPY_ID, "subgroup": "Group 583"}]),
+            say("Done."),
+        ]
         script.seen.clear()
         chat(client, "Also subscribe it from Mikan.")
 
-        second = next(card for card in cards(client) if card["command"] == "rss.subscribe_mikan")
+        [second] = [card for card in cards(client) if card["status"] == "pending"]
         said = {"feed_id": feed["id"], "name": feed["name"], "kind": "acgrip", "subgroup": "ANi"}
         assert second["preview"]["existing"] == [[said]]
         season(factory, 12)
@@ -995,10 +845,11 @@ class TestExistingSubscriptionsAreSaid:
     ) -> None:
         tv, _ = seen_work(client)
         used_before(client, tv)
-        serve_search(factory)
-        script.steps = [tool("rss_subscribe_search", rows=[keyword_row()])]
+        no_mikan_bangumi(factory)
+        serve_keyword_search(factory)
+        script.steps = [tool("rss_subscribe", rows=[{"media_id": SPY_ID, "subgroup": "ANi"}])]
 
-        chat(client, "Subscribe it on acg.rip.")
+        chat(client, "Subscribe it.")
 
         [proposal] = cards(client)
         assert proposal["preview"]["existing"] == []
@@ -1013,11 +864,15 @@ class TestDeletingASubscription:
     ) -> None:
         tv, _ = seen_work(client)
         used_before(client, tv)
-        serve_search(factory)
-        script.steps = [tool("rss_subscribe_search", "k1", rows=[keyword_row()]), say("Done.")]
-        chat(client, "Subscribe it on acg.rip.")
+        no_mikan_bangumi(factory)
+        serve_keyword_search(factory)
+        script.steps = [
+            tool("rss_subscribe", "k1", rows=[{"media_id": SPY_ID, "subgroup": "ANi"}]),
+            say("Done."),
+        ]
+        chat(client, "Subscribe it.")
         [made] = cards(client)
-        decide(client, made["id"], approve=True)
+        decide(client, made["id"], approve=True, subgroups=["acgrip:ANi"])
         resume(client, tool_call_id="k1")
         [feed] = feeds(client)
 

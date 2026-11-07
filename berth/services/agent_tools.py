@@ -38,11 +38,9 @@ TOOLS: tuple[str, ...] = (
     # 100%、觸發使用者設的「完成時執行外部程式」，AI 按一次那邊就跑一次，而沒有情境要它。
     "media.read_media",
     "routes.list_routes",
-    "bangumi.search_bangumi",
-    "bangumi.read_bangumi",
-    "rss.subscribe_mikan",
-    "rss.subscribe_search",
-    # M5.6 票 08：以作品訂閱——伺服器自己找 Mikan 的番組，模型只給作品與推薦的字幕組。
+    # M5.6 票 08、09：以作品訂閱——伺服器自己找 Mikan 的番組，找不到就退到關鍵字站，模型只給作品
+    # 與推薦的字幕組。`bangumi.search/read_bangumi`、`rss.subscribe_mikan`、`rss.subscribe_search`
+    # 的命令留著（RSS 頁與作品頁在用），但不再是工具。
     "rss.subscribe",
     "rss.add_feed",
     # 票 26：重複訂閱要看得到、刪得掉（試用機上同一部作品兩份訂閱，助理只能說「留著」）。
