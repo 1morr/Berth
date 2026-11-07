@@ -810,6 +810,65 @@ test('provider 連續出錯 5 次：側面板說暫停到幾點，再送被擋�
   await expect(panel.getByText('助理暫停到')).toBeVisible()
 })
 
+test('側面板的把手：桌機拖寬、鍵盤調、重新載入記得上次的寬度；390 不畫把手（M5.6 票 10b）', async ({
+  page,
+}) => {
+  await signIn(page, '/jobs')
+  await openBlank(page)
+  const panel = page.locator('#agent-panel')
+  const handle = panel.getByRole('separator', { name: '調整側面板寬度' })
+  const viewport = page.viewportSize()?.width ?? 0
+
+  if (viewport < 1024) {
+    // 窄版：面板蓋滿整個視窗，沒有把手可拖。
+    await expect(handle).toHaveCount(0)
+    expect((await panel.boundingBox())?.width).toBe(viewport)
+    await shot(page, 'panel-resize-390')
+    return
+  }
+
+  const before = (await panel.boundingBox())?.width ?? 0
+  expect(before).toBeCloseTo(416, 0)
+
+  // 拖左緣的把手往左 120px：面板變寬，主內容讓位、整頁沒有橫向捲動。
+  const grip = await handle.boundingBox()
+  expect(grip).not.toBeNull()
+  const x = (grip?.x ?? 0) + (grip?.width ?? 0) / 2
+  const y = (grip?.y ?? 0) + 200
+  const scrolled = await page.evaluate('window.scrollY')
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x - 120, y, { steps: 8 })
+  await page.mouse.up()
+  const dragged = (await panel.boundingBox())?.width ?? 0
+  expect(dragged - before).toBeGreaterThan(100)
+  // 拖動不搶焦點、不捲頁。
+  await expect(handle).not.toBeFocused()
+  expect(await page.evaluate('window.scrollY')).toBe(scrolled)
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'panel-resize-dragged')
+
+  // 重新載入：同一個寬度（記在瀏覽器，不在伺服器）。
+  await page.reload()
+  const reloaded = (await panel.boundingBox())?.width ?? 0
+  expect(Math.abs(reloaded - dragged)).toBeLessThan(1)
+
+  // 鍵盤：把手聚焦，`Shift` + 左方向鍵一次 4rem；拖動過的把手也在 Tab 順序裡。
+  await handle.focus()
+  await expect(handle).toBeFocused()
+  await page.keyboard.press('Shift+ArrowLeft')
+  const widened = (await panel.boundingBox())?.width ?? 0
+  expect(widened - reloaded).toBeCloseTo(64, 0)
+  // 鍵盤操作時焦點環看得見（全站那一圈雙環）。
+  expect(
+    await page.evaluate(
+      'document.querySelector("#agent-panel [role=separator]").matches(":focus-visible")',
+    ),
+  ).toBe(true)
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'panel-resize-keyboard')
+})
+
 async function expectNoHorizontalScroll(page: import('@playwright/test').Page) {
   const overflow = await page.evaluate(
     '[document.documentElement.scrollWidth, window.innerWidth, document.querySelector("#agent-panel").scrollWidth, document.querySelector("#agent-panel").clientWidth]',

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { useEffect, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -28,6 +28,16 @@ import {
   useLeavePanel,
   usePanel,
 } from './panelState'
+import {
+  PANEL_WIDTH_LARGE_STEP,
+  PANEL_WIDTH_MAX,
+  PANEL_WIDTH_MIN,
+  PANEL_WIDTH_STEP,
+  clampPanelWidth,
+  readPanelWidth,
+  rootRem,
+  writePanelWidth,
+} from './panelWidth'
 
 /**
  * 頁首的「助理」鍵（M5 票 12，`.scratch/m5/side-panel-shape.md`〈與頁面的關係〉）。打開時是當前導覽
@@ -76,6 +86,8 @@ function closePanel(setOpen: (open: boolean) => void) {
 /**
  * 側面板。桌面（`lg` 以上）是外框右側的一欄，頁面讓位、兩邊都能操作；窄版蓋滿整個視窗，
  * 底下那一頁由 `AppShell` 設成 `inert`，所以這裡是一個 modal dialog。
+ *
+ * 桌機的那一欄可以拖寬（M5.6 票 10b）：左緣的把手拖動、或用鍵盤的左右方向鍵，寬度記在這個瀏覽器。
  */
 export function AgentPanel({ narrow }: { narrow: boolean }) {
   const { t } = useTranslation()
@@ -84,8 +96,17 @@ export function AgentPanel({ narrow }: { narrow: boolean }) {
   const enabled = useQuery(agentStatusQueryOptions).data?.enabled === true
   // 「對話」那一塊（M5.5 票 18）：disclosure，同帳號選單。
   const [listing, setListing] = useState(false)
+  const [width, setWidth] = useState(readPanelWidth)
+  // 拖到一半放手、下一次拖動的起點：pointerup 當下的 state 可能還是上一格，用 ref 讀最新的。
+  const latestWidth = useRef(width)
+  const drag = useRef<{ x: number; width: number; rem: number } | null>(null)
 
   if (!open) return null
+
+  function setPanelWidth(next: number) {
+    latestWidth.current = next
+    setWidth(next)
+  }
 
   function onKeyDown(event: KeyboardEvent) {
     if (event.key !== 'Escape' || event.defaultPrevented) return
@@ -99,6 +120,39 @@ export function AgentPanel({ narrow }: { narrow: boolean }) {
     closePanel(setOpen)
   }
 
+  /** 把手在面板的左緣：往左＝面板變寬。 */
+  function resizeWithKeys(event: KeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? PANEL_WIDTH_LARGE_STEP : PANEL_WIDTH_STEP
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const next = clampPanelWidth(latestWidth.current + (event.key === 'ArrowLeft' ? step : -step))
+    setPanelWidth(next)
+    writePanelWidth(next)
+  }
+
+  function startDrag(event: PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return
+    // 拖動不搶焦點、不選字：焦點只靠 Tab 進來（票 10b）。
+    event.preventDefault()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    drag.current = { x: event.clientX, width: latestWidth.current, rem: rootRem() }
+  }
+
+  function dragTo(event: PointerEvent<HTMLDivElement>) {
+    const start = drag.current
+    if (start === null) return
+    setPanelWidth(clampPanelWidth(start.width + (start.x - event.clientX) / start.rem))
+  }
+
+  function endDrag(event: PointerEvent<HTMLDivElement>) {
+    if (drag.current === null) return
+    drag.current = null
+    const handle = event.currentTarget
+    if (handle.hasPointerCapture?.(event.pointerId)) handle.releasePointerCapture(event.pointerId)
+    // 放手才寫：拖動途中每一格都寫 `localStorage` 是同步 I/O，會讓拖動掉格。
+    writePanelWidth(latestWidth.current)
+  }
+
   return (
     <aside
       id={PANEL_ID}
@@ -106,8 +160,28 @@ export function AgentPanel({ narrow }: { narrow: boolean }) {
       role={narrow ? 'dialog' : undefined}
       aria-modal={narrow ? true : undefined}
       onKeyDown={onKeyDown}
+      style={narrow ? undefined : { width: `${width}rem` }}
       className="fixed inset-0 z-10 flex min-w-0 flex-col bg-hull lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:w-[26rem] lg:shrink-0 lg:border-l-2 lg:border-rule-strong"
     >
+      {/* 拖寬的把手（M5.6 票 10b）：蓋在面板左緣的分隔線上，桌機才有——窄版面板蓋滿視窗，拖了也沒有意義。
+          `preventDefault` 讓拖動不搶焦點、不在頁面上選字；`touch-none` 讓觸控拖動不變成捲頁。 */}
+      {narrow ? null : (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t('agent.resize')}
+          aria-valuenow={Math.round(width)}
+          aria-valuemin={PANEL_WIDTH_MIN}
+          aria-valuemax={PANEL_WIDTH_MAX}
+          tabIndex={0}
+          onKeyDown={resizeWithKeys}
+          onPointerDown={startDrag}
+          onPointerMove={dragTo}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          className="absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none hover:bg-rule-strong"
+        />
+      )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-rule bg-deck px-4 py-2.5">
         <h2 id={PANEL_TITLE_ID} tabIndex={-1} className="label mr-auto bg-deck text-ink">
           {t('agent.title')}

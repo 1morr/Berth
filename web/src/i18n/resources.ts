@@ -4079,6 +4079,7 @@ const zhHant = {
     toggle: '助理',
     title: '助理',
     close: '關閉',
+    resize: '調整側面板寬度',
     newConversation: '新對話',
     conversations: {
       toggle: '對話',
@@ -8578,6 +8579,7 @@ const en: Translations<typeof zhHant> = {
     toggle: 'Assistant',
     title: 'Assistant',
     close: 'Close',
+    resize: 'Resize the assistant panel',
     newConversation: 'New chat',
     conversations: {
       toggle: 'Chats',

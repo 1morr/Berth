@@ -1086,6 +1086,11 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
 放在導覽之後、登出之前——它不換頁，所以不在 `<nav>` 裡。
 - **版面**：`lg` 以上外框變成兩欄，右欄是 `26rem` 寬、`sticky top-0 h-dvh` 的面板（`border-l-2 border-rule-strong`、`hull` 底），
   頁面讓位、兩邊都能操作；以下 `fixed inset-0` 蓋滿視窗，是 `role="dialog" aria-modal`，底下那一頁 `inert`。
+- **寬度可以拖**（M5.6 票 10b）：桌機面板左緣一條 8px 的把手（`role="separator"`、`aria-orientation="vertical"`、`tabIndex=0`，
+  `aria-label` 走 i18n 的 `agent.resize`），拖動即時改寬；hover 時把手變成 `rule-strong` 的一條，聚焦時是全站那圈雙環。
+  上下限 `20rem`–`40rem`、預設 `26rem`（`agent/panelWidth.ts` 的常數，超出夾住）；左右方向鍵一步 `1rem`、`Shift` 一步 `4rem`
+  （把手在面板左緣：往左是變寬）。拖動 `preventDefault`：不搶焦點、不選字、不捲頁。寬度記在 `localStorage`
+  （每人每台裝置的顯示偏好，不上伺服器），重新載入回到上次的寬度。窄版面板蓋滿視窗，不畫把手。
 - **抬頭列**是 `deck` 底的 `h2`「助理」+ Ghost「對話」與 Ghost「新對話」（AI 開著才有）+ Ghost「關閉」。`Esc` 收起，焦點回到開關；打開時焦點落在輸入欄
   （對話還在讀時先落在標題，輸入欄出現了再接過去——只接標題上的，換頁重掛不搶焦點）。
 - **對話清單**（M5.5 票 18）：「對話」是 disclosure（`aria-expanded` + `aria-controls`），清單在抬頭列下方就地展開（`hull` 底、
