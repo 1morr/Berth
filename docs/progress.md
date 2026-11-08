@@ -42,6 +42,7 @@ M5.6（AI 對話精簡）也已驗收，封存於 `docs/archive/m5.6.md`。
 | 2026-10-31 | M6 流程 | 里程碑開工改成一個指令，所有 session 結尾給下一步指令；閘門 `test_scratch_specs.py`、`test_progress_rules.py` | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-04 | M6 準備 | M5.5 驗收完、封存於 `docs/archive/m5.5.md`；CHANGELOG 定為 0.5.0，tag 與 push 由協調者做。M6 照 plan §11.7 開工 | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-08 | M6 準備 | M5.6 驗收完、封存於 `docs/archive/m5.6.md`：11b 修好「可以看了」的比對後，真服務 e2e 28 綠；M6 照 plan §11.7 開工 | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
+| 2026-11-08 | M6 準備 | 發 0.5.1：CHANGELOG 收成 0.5.1、pyproject 與 uv.lock 同步；沒有 migration 與部署檔變動；全部檢查、pytest 5814、vitest 2460 綠；tag 與 push 已推上 origin | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 
 ## 偏差與決定
 
