@@ -2530,6 +2530,13 @@ services:
 - **卡住而沒有 Issue 的三種 Job 開 Issue**：重試用完的 `submit_failed`、`import_failed`、停滯（[ADR 0016](adr/0016-ai-agent-architecture.md)）。它們涵蓋所有 Job；M5.5 的遲到提醒（§11.6b）只管訂閱的作品，遇到這幾件 Issue 就不再為同一筆另開。
 - **AI 活動頁**：做了什麼、理由、花費，逐筆撤銷。審核頁每一件附 AI 的理由。
 - **修正回流**：寫回 RSS Series、標題別名、排除條件；改正過的案例進 benchmark 候選語料。
+- **M5.6 遺留（開工拆票時先排，依序）**：
+  1. 以作品訂閱選不出「第幾季」：同一個 TMDB 條目、Mikan 每季一頁時挑到第一季（實測送出 100 筆舊集）。
+     證據與兩種修法方向在 brief §20.29；決定前先對 Mikan 的實頁重量一次。
+  2. S2 系列「只要列清單」也先搜 20 次種子（基準 0）、S2 的 `contains` 用十幾次：`download` skill 第 4 步
+     的指示造成，見 `docs/research/agent-slimming-2026-11-06.md` §8；改完用真模型重跑 S2 與 S2-mushoku 對照。
+  3. 確認卡的列結構：依作品分組、列只留發佈名／大小／已有的集、照季集排序、同集標記、全選／按作品收合、
+     字幕組 `Options` 改 radiogroup——見 `.scratch/m5.6/issues/10-m5.6-ui-wrap-up.md` 的〈沒修〉。
 
 驗收：
 - 第一批每種任務在影子模式跑一週真實資料，與人的決定一致率達標（門檻拆票時定）。
