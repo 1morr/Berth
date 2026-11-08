@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-08
+
+**從 0.5.0 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變，沒有資料庫
+migration。image 是 `ghcr.io/1morr/berth:0.5.1`，同時是 `:0.5` 與 `:latest`——固定在 `:0.5` 的跟著升上來，固定在其他版本
+的要把 `berth` 的 image 改成 `:0.5`。下面改到的 API 與助理的工具只有 Berth 自己的畫面與助理在用，升級之後重新整理一次
+頁面即可。
+
 ### Added
 
 - **助理以作品訂閱 Mikan**：多一支 `rss.subscribe`，助理只給作品與推薦的字幕組。Berth 用作品的中文
