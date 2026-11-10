@@ -2526,7 +2526,7 @@ services:
   - 事件觸發，一個任務一件事。
   - **兩段呼叫**：
     - 第一段不給工具：程式組資料包（含程式先查好的 TMDB、Bangumi、AniList、Mikan，已有 adapter），模型輸出固定 schema 的決定，程式驗證後經 M5 的執行器套用。這同時是成本防護與注入防護。
-    - 模型答「資料不夠」（schema 裡的一種結論）才有第二段：給唯讀網搜工具，網域白名單沿用對話 agent（`services/web.py` 的 `SEARCH_DOMAINS`），最多 3 次，算進下面的每輪上限。網頁是外部內容；輸出仍是固定 schema、仍走驗證。沒設 Tavily key 就跳過第二段、交給人。
+    - 模型答「資料不夠」（schema 裡的一種結論）才有第二段：給唯讀網搜工具，網域白名單沿用對話 agent（`services/web.py` 的 `SEARCH_DOMAINS`），最多 3 次，算進下面的每輪上限。網搜走對話 agent 的同兩條路（Anthropic 接口用伺服器端 `web_search`，設了 Tavily key 用 `tavily_search`），兩條都沒有就跳過第二段、交給人。網頁是外部內容；輸出仍是固定 schema、仍走驗證。
   - 防護：每次呼叫 2048 output、每輪 4 次模型呼叫、100K / 8K token、並發 2、同一對象 24 小時最多試 2 次、「交給人」的結論也快取。
   - 交給人的走 M4 的「等你處理」。
 - **驗證**：M3 的三道程式檢查（播出日、片長、Jellyfin 回驗），加上集在 TMDB 存在、不撞目標路徑、季集範圍。AI 的結果照樣走一遍，不通過的不套用。
