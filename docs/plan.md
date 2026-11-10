@@ -2533,7 +2533,7 @@ services:
 - **第一批任務型別**：
   - 規則層 low 的 Plan（§4.5）。
   - Unmatched 檔案與待綁定 RSS Series 猜作品。
-  - RSS Series 的季號與 offset 修正：寫回 Series，重算未確認的集數。
+  - RSS Series 的第一批：證據夠就確認整批；季號或 offset 錯就改正一集、寫回 Series，重算未確認的集數。
   - audit 的確認或撤銷。
   - 三道程式檢查標出的可疑入庫。
 - **AI 評估**（取代影子模式）：每種任務型別一份凍在 repo 的案例集，各附標準答案，用手動跑的指令打真模型（花錢，不進單元測試），結果記在票裡；換模型或改 prompt 就重跑。
@@ -2561,6 +2561,8 @@ services:
 
 範圍：
 - **Issue 的各型別**：可逆的自動，刪檔與放棄追蹤做成 Proposal（`docs/research/m5-ai-direction-2026-10-27.md` C1 表的 Issue 與巡檢 Issue 那幾列）。
+- **重複版本**（審核頁）：「保留兩者」「跳過」由 AI 做，「取代舊版」做成 Proposal（C1 表那一列；2026-11-10 補進，M6 第一批漏列）。
+- **`episodes_overdue`**（M5.5 加的，C1 表沒有）：依 `detail_json` 的卡住原因做——`submit_failed`、`stalled`、`download_failed`、`import_failed` 重試或換字幕組搜尋並送單（受送單的數量與磁碟閘），`not_released` 只記理由、等下一輪。
 - **每週巡檢**把程式檢查標出的項目交給 AI：可逆的修、其餘交給人，寫進週報（brief §14〈巡檢〉）。
 - **修正回流**：寫回 RSS Series、標題別名、排除條件；改正過的案例進 benchmark 候選語料。
 

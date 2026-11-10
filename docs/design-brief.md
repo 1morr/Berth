@@ -695,7 +695,7 @@ Media 詳情各塊的規則：
 | **M4 巡檢與通知** | 每日程式檢查加每週週報；`events` 的訂閱者加 channel adapter（第一個是 Discord，[ADR-0015](adr/0015-notifications-discord-dm.md)）加每人的訂閱設定；「可以看了」「有 N 件等你處理」 | 不需要 AI；平常不打開 Berth 的前提是有事時它會說，所以排在 AI 之前 |
 | **M5 AI 地基與對話 agent** | 命令登錄表與執行器、Proposal（兩者不需要 AI 也成立）；provider（Anthropic 與 OpenAI 相容，各自可設 base URL 與 key）、防護與記帳、觀測頁；每一頁都叫得出的側面板對話：工具、確認卡、外部資料（AniList 當季清單、Bangumi 放送表、網搜）、skills、上下文壓縮、斜線指令 | 有人在場的對話最適合讓核心第一次碰到真實模型；確認卡就是 Proposal 的第一個介面 |
 | **M6 人工接管開關** | 以決定點為單位的人 / AI 開關；背景 AI 任務（規則層 low 的 Plan、Unmatched 與待綁定猜作品、offset 修正、audit 確認或撤銷、可疑入庫）；AI 評估；AI 活動頁與撤銷 | 要等核心在 M5 穩了，AI 才有可靠的規則層與執行器可接 |
-| **M6.5 Issue 與巡檢交給 AI** | Issue 的各型別（可逆的自動、刪檔與放棄追蹤做成 Proposal）、每週巡檢交給 AI、修正回流 | 沿用 M6 的開關與 AI 評估；從 M6 拆出（2026-11-10），讓 M6 早點收尾 |
+| **M6.5 Issue 與巡檢交給 AI** | Issue 的各型別（可逆的自動、刪檔與放棄追蹤做成 Proposal，含 `episodes_overdue`）、重複版本、每週巡檢交給 AI、修正回流 | 沿用 M6 的開關與 AI 評估；從 M6 拆出（2026-11-10），讓 M6 早點收尾 |
 | **M7 Discord 與 MCP** | M4 的 Discord bot 接上同一個核心：同樣的對話體驗，確認卡是帶按鈕的訊息，身分用個人 API token（§16.2）；命令登錄表另外包成 MCP server | 只多兩個入口，核心與 Proposal 共用 |
 
 **Proposal 只用在不可逆的動作與 AI 沒把握的事**：命令名、參數、理由，人確認才執行。這與「AI 不動原檔」是同一條界線。
