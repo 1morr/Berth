@@ -20,7 +20,7 @@ M5.6（AI 對話精簡）也已驗收，封存於 `docs/archive/m5.6.md`。
 | M5 | `.scratch/m5/issues/` | — | 已驗收（2026-10-28），封存於 `docs/archive/m5.md` |
 | M5.5 | `.scratch/m5.5/issues/` | — | 已驗收（2026-11-04），封存於 `docs/archive/m5.5.md` |
 | M5.6 | `.scratch/m5.6/issues/` | — | 已驗收（2026-11-08），封存於 `docs/archive/m5.6.md` |
-| M6 | `.scratch/m6/issues/` | plan §11.7；brief §14、§6.10、§20.29 | 人工接管開關、第一批背景 AI 任務、影子模式；先修 M5.6 遺留並發 0.5.2（2026-11-10 拆出 M6.5） |
+| M6 | `.scratch/m6/issues/` | plan §11.7；brief §14、§6.10、§20.29 | 人工接管開關、第一批背景 AI 任務、AI 評估；先修 M5.6 遺留並發 0.5.2（2026-11-10 拆出 M6.5） |
 | M6.5 | `.scratch/m6.5/issues/` | plan §11.7b；brief §14 | Issue 與每週巡檢交給 AI、修正回流（2026-11-10 從 M6 拆出） |
 | M7 | `.scratch/m7/issues/` | plan §11.8；brief §14、§16.2 | Discord 與 MCP（2026-09-22 加入、09-24 加 MCP、10-27 改名） |
 | docs-diet | `.scratch/docs-diet/issues/` | — | 已驗收（2026-10-30），封存於 `docs/archive/docs-diet.md` |
@@ -45,6 +45,7 @@ M5.6（AI 對話精簡）也已驗收，封存於 `docs/archive/m5.6.md`。
 | 2026-11-08 | M6 準備 | M5.6 驗收完、封存於 `docs/archive/m5.6.md`：11b 修好「可以看了」的比對後，真服務 e2e 28 綠；M6 照 plan §11.7 開工 | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-08 | M6 準備 | 發 0.5.1：CHANGELOG 收成 0.5.1、pyproject 與 uv.lock 同步；沒有 migration 與部署檔變動；全部檢查、pytest 5814、vitest 2460 綠；tag 與 push 已推上 origin | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-10 | M6 準備 | 盤點 M5 系列：全部檢查、pytest 5814、vitest 2460、bench 綠；M6 拆出 M6.5，一致率門檻 ≥ 90% 且至少 20 件，訂閱挑季修完先發 0.5.2（plan §11.7、§11.7b） | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
+| 2026-11-10 | M6 準備 | 使用者不逐件處理：拿掉影子模式，改對凍在 repo 的案例做 AI 評估（套用錯 0 件）；背景任務資料不夠時第二段唯讀網搜（plan §11.7、brief §14） | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 
 ## 偏差與決定
 
@@ -52,3 +53,4 @@ M5.6（AI 對話精簡）也已驗收，封存於 `docs/archive/m5.6.md`。
 
 - 2026-10-31 M6 流程：M6 起 spec 由開工 session 寫到 `.scratch/<里程碑>/spec.md`，plan §11 對應節縮成一行連結、編號不變（改 plan §11 導言、`CLAUDE.md`〈Skills〉）；M0–M5 與 docs-diet 不補。
 - 2026-11-10 M6 範圍：Issue 各型別、每週巡檢交給 AI、修正回流移到新的 M6.5（使用者定）；影子一致率門檻 ≥ 90%、至少 20 件；訂閱挑季修完先發 0.5.2。改 plan §11.7、§11.7b、brief §14、§17、`PRODUCT.md`。
+- 2026-11-10 M6 AI 評估：使用者不在頁面上逐件處理，影子模式量不出一致率，拿掉；開關改人 / AI 兩段，驗收改成凍在 repo 的案例集上套用錯 0 件、交回人的比例下降（推翻同日的 ≥ 90% 門檻）。背景任務答「資料不夠」才給限網域的唯讀網搜。改 plan §4.5、§11.7、§11.7b、brief §6.10、§14、ADR 0008、`CONTEXT.md`。

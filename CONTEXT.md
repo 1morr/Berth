@@ -424,9 +424,9 @@ _Avoid_: dispatcher, runner
 做一件事的是誰，寫進 `events.actor`：人（user id）、`system`、`rss:<id>`、`ai:<user id>`（AI 替那個人做；角色與碰得到的範圍也照那個人）。寫法只在 `domain/actor.py`。
 _Avoid_: user（user 是帳號）, operator
 
-**Shadow Mode**（影子模式）:
-一種 AI 任務型別的試用狀態：AI 照跑，只記錄它會怎麼做，照舊由人決定，統計與人的一致率。使用者看數字後切成自動。
-_Avoid_: dry-run（dry-run 是 RSS 的預覽）, test mode
+**AI Eval**（AI 評估）:
+一種 AI 任務型別開放前的檢查：對凍在 repo、附標準答案的案例集打真模型，數 AI 套用而錯的件數與交回人的比例。2026-11-10 取代影子模式（使用者不逐件處理，量不出一致率）。
+_Avoid_: shadow mode, dry-run（dry-run 是 RSS 的預覽）
 
 **AI Activity**（AI 活動）:
 AI 做過的每一件事、理由、花費，逐筆可撤銷。
