@@ -708,6 +708,7 @@ brief §6.4，AutoBangumi v3.2 的做法，`mapping._published_run`。字幕組�
 - planner 判出 low 時開任務，`ai_worker` 叫模型，驗證通過且決定點的開關在 AI 時套用。
 - 背景任務兩段（§11.7）：第一段不給工具，程式組資料包，模型只輸出固定 schema 的 Plan；模型答「資料不夠」才有第二段的唯讀網搜。
 - 輸入壓縮（同模式的檔案只送樣本 + 數量）、schema 驗證、快取鍵與 provider 無關，住在 services。
+- 片長（2026-11-11 補）：每個檔案帶 `FileEntry.duration_s` 與大小，TMDB 每一集帶 `runtime`；片長偏離同組的檔案（SP、合併檔的特徵）不壓進樣本、單獨送。審核理由 `runtime_conflict` 的 Plan 要靠這兩個數字才判得了；AI 的結果照樣過 `check_runtime`。
 - 要補的缺口：用量走 `ai_calls` 記帳；理由除了封閉的 `ReasonCode` 還要一欄自由文字；「猜作品」是另一種任務（`PlanItem` 沒有 `media_id`）。
 
 ### 4.6 Benchmark【決定】
