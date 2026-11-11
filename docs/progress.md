@@ -46,6 +46,7 @@ M5.6（AI 對話精簡）也已驗收，封存於 `docs/archive/m5.6.md`。
 | 2026-11-08 | M6 準備 | 發 0.5.1：CHANGELOG 收成 0.5.1、pyproject 與 uv.lock 同步；沒有 migration 與部署檔變動；全部檢查、pytest 5814、vitest 2460 綠；tag 與 push 已推上 origin | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-10 | M6 準備 | 盤點 M5 系列：全部檢查、pytest 5814、vitest 2460、bench 綠；M6 拆出 M6.5，一致率門檻 ≥ 90% 且至少 20 件，訂閱挑季修完先發 0.5.2（plan §11.7、§11.7b） | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-10 | M6 準備 | 使用者不逐件處理：拿掉影子模式，改對凍在 repo 的案例做 AI 評估（套用錯 0 件）；背景任務資料不夠時第二段唯讀網搜（plan §11.7、brief §14） | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
+| 2026-11-11 | M6 開工 | plan §11.7 細化成 `.scratch/m6/spec.md`、§11.7 縮成連結；拆 12 張票（第一批五種併成四型、評估與網搜同一張），票序在 spec | 新 session 下 `/implement .scratch/m6/issues/01-subscribe-picks-season.md` |
 
 ## 偏差與決定
 
@@ -57,3 +58,4 @@ M5.6（AI 對話精簡）也已驗收，封存於 `docs/archive/m5.6.md`。
 - 2026-11-10 M6.5 範圍：補進 M6 第一批漏列的重複版本（保留兩者、跳過自動，取代做 Proposal）與 C1 表沒有的 `episodes_overdue`（使用者定）；M6 的第一批確認寫明「證據夠就確認整批」。改 plan §11.7、§11.7b、brief §14。
 - 2026-11-11 M6 送下載的閘：背景任務叫帶 `Flag.DOWNLOADS` 的命令時，一次超過 13 個 torrent 或磁碟不夠改 Proposal；AI 評估件數分級，會送下載的至少 60 件、其餘 20 件（使用者定）。改 plan §11.7、§11.7b、brief §14。
 - 2026-11-11 M6 片長進資料包：背景任務的檔案清單帶 mediainfo 量到的片長與大小、TMDB 每集帶 `runtime`，片長偏離同組的檔案單獨送，不壓進樣本。改 plan §4.5、brief §6.10。
+- 2026-11-11 M6 拆票：第一批五種任務併成四型——程式檢查擋在入庫前的兩種併進「審核中的 Plan」，Jellyfin 回驗的不符併進「audit 與第一批」；評估與第二段網搜同一張；開關預設人，評估達標才放上設定頁。改 spec〈範圍〉。

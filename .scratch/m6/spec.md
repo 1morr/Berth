@@ -1,0 +1,118 @@
+# M6 人工接管開關
+
+由 plan §11.7 細化（2026-11-11 開工 session）。plan 那一節只留標題與連到這裡的一行；程式碼裡的 §11.7 引用指這份。
+
+## 目標
+
+M5 有了命令登錄表、執行器、Proposal 與對話 agent，但規則層沒把握的事（low 的 Plan、Unmatched、待綁定的 RSS Series、第一批、audit、程式檢查標出的可疑入庫）仍然全部進「等你處理」。M6 讓 AI 在背景接手這些事：可逆的通過驗證後直接做，不可逆的準備好 Proposal 給人一鍵確認，做不了的交回人（brief §6.10、§14、ADR 0008、ADR 0016）。
+
+開關以決定點為單位，人 / AI 兩段，可隨時切回；關掉 AI 時與 M4 相同。使用者不在頁面上逐件處理（2026-11-10 定），所以不做影子模式，信任靠 **AI 評估**：每種任務型別先對凍在 repo、附標準答案的案例集打真模型，套用的錯 0 件才開放。
+
+開工前先修 M5.6 遺留：以作品訂閱挑錯季（0.5.1 已發出去的缺陷）修完先發 0.5.2。
+
+2026-11-10 使用者定：Issue 的各型別、每週巡檢交給 AI、修正回流移到 M6.5（plan §11.7b）。
+
+## 範圍
+
+### M5.6 遺留（先排，依序）
+
+1. **以作品訂閱選不出「第幾季」**：同一個 TMDB 條目、Mikan 每季一頁時挑到第一季（實測送出 100 筆舊集）。證據與兩種修法方向在 brief §20.29（訂閱帶上季，或比對被推薦那一季的 `air_date`）；兩種都要處理「Mikan 把 split-cour 拆成兩頁」與「Mikan 的頁比 TMDB 的季粗」。決定前先對 Mikan 的實頁重量一次，結果補進 brief §20.29。修完**先發 0.5.2**（tag 與 push 照舊先問使用者），再做後面的票。
+2. **S2 系列「只要列清單」也先搜 20 次種子**（基準 0）、S2 的 `contains` 用十幾次：`download` skill 第 4 步的指示造成，見 `docs/research/agent-slimming-2026-11-06.md` §8。改完用真模型重跑 S2 與 S2-mushoku 對照基準。
+3. **確認卡的列結構**：依作品分組（作品名、Route、資料夾一次）、列只留發佈名／大小／已有的集、照季集排序、同集標記、全選／按作品收合、字幕組 `Options` 改 radiogroup（`/rss` 也在用）。清單在 `.scratch/m5.6/issues/10-m5.6-ui-wrap-up.md` 的〈沒修〉；會推翻 M5.6 票 03 的「列裡重述 Route」。
+
+### 卡住而沒有 Issue 的三種 Job 開 Issue
+
+重試用完的 `submit_failed`、`import_failed`、停滯（ADR 0016）。它們涵蓋所有 Job；M5.5 的遲到提醒（`episodes_overdue`）只管訂閱的作品，遇到這幾件 Issue 就不再為同一筆另開。不需要 AI，是「交給人」的出口，排在 AI 任務之前。
+
+### 決定點的開關
+
+- 人（M4 行為）／AI，兩段，**預設人**。以決定點為單位，不以頁面為單位。
+- 可逆的通過驗證後直接做；不可逆的仍是 Proposal：AI 準備好、人一鍵確認（`services/commands.py` 的 `needs_person` 是唯一判斷）。
+- 逐點的接管邏輯照 `docs/research/m5-ai-direction-2026-10-27.md` C1 那張表（表上的「影子」一段已拿掉）。被排除的 Feed Item「仍然下載」不接管。
+- 一種任務型別的開關，在它的 AI 評估達標的那張票才出現在設定頁；評估沒過的型別不提供切到 AI。
+
+### AI 任務與 `ai_worker`
+
+- `ai_tasks` 表與 `ai_worker` 迴圈；事件觸發，一個任務一件事。
+- **兩段呼叫**：
+  - 第一段不給工具：程式組資料包（含程式先查好的 TMDB、Bangumi、AniList、Mikan，已有 adapter），模型輸出固定 schema 的決定，程式驗證後經 M5 的執行器套用。這同時是成本防護與注入防護。
+  - 模型答「資料不夠」（schema 裡的一種結論）才有第二段：給唯讀網搜工具，網域白名單沿用對話 agent（`services/web.py` 的 `SEARCH_DOMAINS`），最多 3 次，算進每輪上限。網搜走對話 agent 的同兩條路（Anthropic 接口用伺服器端 `web_search`，設了 Tavily key 用 `tavily_search`），兩條都沒有就跳過第二段、交給人。網頁是外部內容；輸出仍是固定 schema、仍走驗證。
+- **資料包**（plan §4.5、brief §6.10）：torrent 名、檔案清單（每個檔案帶大小與 mediainfo 量到的片長；同模式的只送樣本 + 數量，片長偏離同組的單獨送）、規則層的部分解析與理由、TMDB 季集結構（集數、集名、首播日、`runtime`）、Bangumi / AniList / Mikan 資料、命名規則、使用者偏好。不送檔案內容與帳密。快取鍵 `torrent hash + 解析器版本 + prompt 版本`，與 provider 無關。
+- **輸出**：固定 schema 的決定，理由除了封閉的 `ReasonCode` 還有一欄自由文字；用量走 `ai_runs` / `ai_calls` 記帳。
+- **防護**：每次呼叫 2048 output、每輪 4 次模型呼叫、100K / 8K token、並發 2、同一對象 24 小時最多試 2 次、「交給人」的結論也快取、provider 斷路器沿用 M5。觸發後不套用、交給人並帶原因碼。
+- **送下載的閘**（2026-11-11）：背景任務叫帶 `Flag.DOWNLOADS` 的命令（綁定 Series 的補舊集、缺集搜尋、重送），這一次會送出的 torrent 超過 `AiSettings.card_downloads`（13，同確認卡），或送完剩餘磁碟會低於最低剩餘磁碟設定，就不送，改成 Proposal。
+- 交給人的走 M4 的「等你處理」。
+
+### 驗證
+
+M3 的三道程式檢查（播出日、片長、Jellyfin 回驗），加上集在 TMDB 存在、不撞目標路徑、季集範圍、副檔名與分類一致。AI 的結果照樣走一遍，不通過的不套用、交給人。
+
+### 第一批任務型別
+
+2026-11-11 拆票時把 plan 列的五種併成四型（程式檢查擋下的與入庫後抓到的，分別歸進決定形狀相同的那一型）：
+
+- **審核中的 Plan**（plan §4.5）：規則層 low，加上程式檢查擋在入庫前的 `air_date_conflict`、`runtime_conflict`（決定一樣是改寫 Plan 後核准）；`target_exists` 要取代既有檔時照 C1 表留給人。
+- **Unmatched 檔案**：指派到集或標 Extra；猜作品是另一種決定（`PlanItem` 沒有 `media_id`）。「忽略」仍是 Proposal。
+- **待綁定的 RSS Series**：猜作品、選 Route 後綁定；綁定會補舊集送單，受送下載的閘；Route 沒有預設時是 Proposal。
+- **audit 與第一批**：audit 確認，或撤銷後 rematch；第一批（以 RSS Series 分組的 audit）證據夠就確認整批，季號或 offset 錯就改正一集、寫回 Series，重算未確認的集數；Jellyfin 回驗抓到的不符（`jellyfin_item_mismatch`）撤銷、rematch 或交給人。不讓 AI 逐筆重看每一次入庫。
+
+### AI 評估（取代影子模式）
+
+- 每種任務型別一份凍在 repo 的案例集，各附標準答案，用手動跑的指令打真模型（花錢，不進單元測試），結果記在票裡；換模型或改 prompt 就重跑。
+- 規則層 low 的 Plan、Unmatched：用 benchmark 現有語料裡 review 與 Unmatched 的檔案（目前 84 與 42 個）。其餘型別：做那種型別的票時從真實資料取樣，連同標準答案凍進 repo。
+- 件數照風險分級（2026-11-11）：只動可撤銷東西的至少 20 件；會叫帶 `Flag.DOWNLOADS` 命令的（送出的 torrent 收不回）至少 60 件。全對時 20 件只排除得了錯誤率高於約 14%，60 件約 5%。
+- 門檻：通過驗證而被套用的決定錯 0 件，交回人的比例低於規則層原本的 review 比例。
+
+### AI 活動頁與理由
+
+AI 活動頁列出做了什麼、理由、花費，逐筆撤銷（反向命令照登錄表）。審核頁每一件附 AI 的理由。週報多列 AI 這週做了幾件、交回人幾件。
+
+### 不做
+
+- Issue 的各型別交給 AI、重複版本、`episodes_overdue`、每週巡檢交給 AI、修正回流：M6.5（plan §11.7b）。
+- 影子模式：2026-11-10 拿掉。
+
+## 共同規則
+
+- **給模型的文字一律英文**：prompt、資料包的欄位說明、schema 的描述。給人看的文案走 i18n key，zh-Hant 與 en 並列。
+- **同輪要改的文件**：brief §6.10、§14、§20（實測到的外部事實，附來源）；plan §2（新表）、§3.2（新迴圈）、§4.5、§6（新端點）、§7（新頁面）；`CONTEXT.md`（新名詞或改名）；`scripts/experiments/README.md`（實驗與評估腳本有增改時）；CHANGELOG。
+- `services` 新增或改動的公開命令都標 `@command`；非 `internal` 的進命令登錄表。AI 的套用一律經執行器，不另開捷徑；`actor` 用 AI 的身分，事件與 AI 活動頁認得出是誰做的。`test_command_marks.py`、`test_command_registry.py` 的斷言跟著改，不加豁免。
+- **每種任務型別在它自己那張票裡**：設計資料包與 schema、接驗證、凍案例集、跑 AI 評估並把數字寫進票的 Comments、達標才把開關放上設定頁。沒達標的回報使用者，不開放。
+- AI 評估與真模型的量測：結果放在 `.local/experiments/results/`，摘要（數字表與結論）寫進票的 Comments，並在 `docs/research/` 留一份累積的評估紀錄；要用 `.env` 的 key，缺 key 時問使用者。
+- 動 `parser/` 的票必跑 `berth bench`，`auto_wrong` 不得上升，貼數字。
+- **關掉 AI 時與 M4 相同**：每張加 AI 行為的票都有一條整合測試證明 `AiSettings.enabled` 關著、或決定點在「人」時，行為與改動前一致。
+- 背景任務用假模型（`adapters/ai/fake.py`）寫整合測試，不打真模型。
+- UI 改動走 `/impeccable`（新頁先 `shape`），用 playwright 實跑，附截圖或文字結果，桌機與 390px 都看。
+- 新表走 migration；新的設定欄位容得下舊資料，不回填。
+
+## 驗收
+
+- 以作品訂閱挑得到使用者要的那一季：brief §20.29 的兩個情境（整合測試加一次實測）；0.5.2 已發。
+- S2-mushoku（只要列清單）沒有種子搜尋；S2 的品質不比基準差（真模型重跑，數字進研究文檔）。
+- 確認卡依作品分組、照季集排序、同集有標記，桌機與 390px 可用、鍵盤操作得到（playwright）。
+- 重試用完的 `submit_failed`、`import_failed`、停滯各開一件 Issue，進「等你處理」；同一筆不再另開 `episodes_overdue`（整合測試）。
+- 第一批每種任務的 AI 評估：件數照分級，通過驗證而被套用的決定錯 0 件，交回人的比例低於規則層原本的 review 比例（數字在各票 Comments）。
+- 背景 AI 綁錯一個 Series 時送出的 torrent 不超過 13 個，多的停在 Proposal（整合測試）。
+- AI 的結果沒通過驗證時不套用、交給人並附理由（整合測試）。
+- AI 活動頁逐筆撤銷得回來；審核頁的每一件附 AI 的理由；週報列出 AI 這週做了幾件、交回人幾件。
+- benchmark 上 `auto_wrong` 不升、review 比例下降。
+- 關掉 AI 時與 M4 相同。
+
+## 票序
+
+票在 `.scratch/m6/issues/`，編號即建議的開工順序；依賴寫在各票的 `Blocked by`。02–04 被 01 擋、05 被 04 擋，是照 plan 的順序（0.5.2 只放訂閱挑季的修正；交給人的出口排在 AI 任務之前），不是程式上的依賴。
+
+| 票 | 標題 | Blocked by |
+| --- | --- | --- |
+| 01 | 以作品訂閱挑對那一季，發 0.5.2 | — |
+| 02 | `download` skill：只要列清單時不搜種子 | 01 |
+| 03 | 確認卡改列結構 | 01 |
+| 04 | 卡住的三種 Job 開 Issue | 01 |
+| 05 | AI 任務地基：先只接審核中的 Plan | 04 |
+| 06 | AI 評估指令與審核 Plan 的案例集，加第二段網搜，達標後開放 | 05 |
+| 07 | AI 活動頁、審核頁附理由、週報 | 05 |
+| 08 | AI 任務：Unmatched 檔案 | 06 |
+| 09 | AI 任務：待綁定 RSS Series，加送下載的閘 | 06 |
+| 10 | AI 任務：audit 與第一批，加 Jellyfin 回驗抓到的不符 | 06 |
+| 11 | M6 UI 收尾 | 03、07–10 |
+| 12 | M6 驗收 | 01–11 |
