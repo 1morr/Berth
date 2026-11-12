@@ -11,6 +11,7 @@
 - `.scratch/<里程碑>/issues/`：票，執行單位；狀態在票的 `Status:` 行。
 - `CONTEXT.md`：名詞表，唯一來源；命名一律用它的詞。
 - `PRODUCT.md`、`DESIGN.md`：impeccable 維護的產品與設計脈絡（第一個 UI 票起）。
+- `docs/overview/`：給使用者看的導覽（原理、架構圖、功能、決定清單），`/1morr:checkpoint` 在里程碑之間更新；agent 以上面的原文件與程式碼為準。
 
 ## 每個 session 的流程
 
@@ -19,12 +20,12 @@
 1. 讀 `docs/progress.md`（只含進行中的里程碑，讀得完；M0–M5 在 `docs/archive/`，按需查），再讀該里程碑的 `spec.md` 與票；只讀票列出的 plan / brief 章節，其他按需讀。
 2. `/implement <票路徑>`：tdd、定期 typecheck、結尾 `/code-review <開工時的 commit>`、commit。
 3. 驗證：`docs/development.md`〈全部檢查〉（`pre-commit run --all-files`：lint、type 與檔案衛生）加 test；貼指令輸出。
-4. 實作若推翻 plan 或 brief，同一 commit 改文件，並在 progress.md「偏差與決定」記一條（≤ 200 字，帶里程碑標記）；票內的取捨記在票的 `## Comments`。
-5. 票的 `Status:` 改為 `done`、勾掉驗收條件、code-review 未處理的發現記到票的 `## Comments`；progress.md 加一列 session 紀錄（≤ 200 字，帶里程碑標記；每列每條的字數與標記由 `tests/unit/test_progress_rules.py` 守）；驗收票多一步「封存這個里程碑」（做法在 progress.md〈寫法與封存〉，用 `scripts/docs_moved_lines.py` 證明沒丟；封存後 session 紀錄加一列 `<下一個里程碑> 準備`，「下一步」寫它的開工指令，沒有下一個里程碑就留空、只在對話告訴使用者）；commit。
+4. 實作若推翻 plan 或 brief，同一 commit 改文件，並在 progress.md「偏差與決定」記一條（≤ 200 字，帶里程碑標記與決定者，寫法在 progress.md〈寫法與封存〉）；新 ADR（0017 起）寫一行 `決定者：使用者定`、`使用者同意` 或 `Agent 定`（`tests/unit/test_adr_rules.py` 守）；票內的取捨記在票的 `## Comments`。
+5. 票的 `Status:` 改為 `done`、勾掉驗收條件、code-review 未處理的發現記到票的 `## Comments`；progress.md 加一列 session 紀錄（≤ 200 字，帶里程碑標記；每列每條的字數與標記由 `tests/unit/test_progress_rules.py` 守）；驗收票多一步「封存這個里程碑」（做法在 progress.md〈寫法與封存〉，用 `scripts/docs_moved_lines.py` 證明沒丟；封存後 session 紀錄加一列 `<下一個里程碑> 準備`，「下一步」寫 `/1morr:checkpoint <這個里程碑>`，沒有下一個里程碑就留空、只在對話告訴使用者）；commit。
 
 完成標準：票上每個驗收條件打勾、全部檢查與 test 綠燈、progress.md 已更新、已 commit。缺一就還沒完成。
 
-**所有 session 的結尾**（做票、訪談、寫 plan、里程碑開工都算）：告訴使用者下一步要在新 session 下的完整指令，並把同一句寫進 progress.md 那一列的「下一步」（`tests/unit/test_progress_rules.py` 守最後一列）。下一張票是 `/implement <票路徑>`，里程碑做完是 `/to-tickets docs/plan.md 拆 <下一個里程碑> 的票`；要使用者先決定才能繼續時，寫 `等使用者：<要決定什麼>`。
+**所有 session 的結尾**（做票、訪談、寫 plan、里程碑開工都算）：告訴使用者下一步要在新 session 下的完整指令，並把同一句寫進 progress.md 那一列的「下一步」（`tests/unit/test_progress_rules.py` 守最後一列）。下一張票是 `/implement <票路徑>`，里程碑做完是 `/1morr:checkpoint <剛做完的里程碑>`（回顧、更新導覽；它結束時寫 `/to-tickets docs/plan.md 拆 <下一個里程碑> 的票`）；要使用者先決定才能繼續時，寫 `等使用者：<要決定什麼>`。
 
 ## 事實與查證
 

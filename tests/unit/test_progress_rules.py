@@ -1,7 +1,7 @@
 """`docs/progress.md` 的寫法規則（該檔〈寫法與封存〉）：每列 / 每條的長度與里程碑標記。
 
 分工：`test_progress_merge.py` 守 union 合併不弄壞檔案結構（段落、重複、表格連續）；
-這裡守內容的四條：
+這裡守內容的五條：
 
 - session 紀錄的每一列、偏差的每一條，整行 ≤ 200 字（Python `len`）。
 - 每一列 / 每一條開頭標里程碑：票欄 `<里程碑> <票號> <短標題>`，
@@ -10,6 +10,8 @@
   不再追加在這裡。
 - session 紀錄最後一列的「下一步」含反引號包住、`/` 開頭的指令，或以 `等使用者：` 開頭。
   紀錄是空的不算違規（封存後會空）。
+- 2026-11-12 起的偏差標決定者：`（使用者定）`、`（使用者同意）` 或 `（Agent 定）`。
+  之前的條目不補（當時沒記，補了也是猜）。
 
 只比字數、開頭的標記與最後一列的下一步，不比措辭；空行、表格分隔列的寫法都不影響結果，
 列的順序只決定哪一列算最後一列。
@@ -29,6 +31,8 @@ _DEVIATION = re.compile(r"- \d{4}-\d\d-\d\d (\S+?)：?(?:\s|$)")
 _ROW = re.compile(r"\| \d{4}-\d\d-\d\d \|")
 _COMMAND = re.compile(r"`/[^`\s][^`]*`")
 _WAITING = "等使用者："
+DECIDERS = ("（使用者定）", "（使用者同意）", "（Agent 定）")
+DECIDER_SINCE = "2026-11-12"
 
 
 def _section(text: str, heading: str) -> list[str]:
@@ -80,6 +84,8 @@ def problems(text: str) -> list[str]:
         if line.startswith("- "):
             match = _DEVIATION.match(line)
             check(line, match.group(1) if match else None)
+            if line[2:12] >= DECIDER_SINCE and not any(mark in line for mark in DECIDERS):
+                found.append(f"沒標決定者（{'、'.join(DECIDERS)}）：{line[:60]}")
     return found
 
 
@@ -186,3 +192,17 @@ class TestTheGatesThemselves:
     def test_an_empty_log_is_not_caught(self) -> None:
         lines = [line for line in self.text().splitlines() if not _ROW.match(line)]
         assert problems("\n".join(lines)) == []
+
+    def decider_problems(self, line: str) -> list[str]:
+        return [item for item in problems(self.text() + line + "\n") if "決定者" in item]
+
+    def test_a_new_deviation_without_a_decider_is_caught(self) -> None:
+        assert self.decider_problems("- 2026-11-12 M6 票 99：改了門檻") != []
+        assert self.decider_problems("- 2099-01-01 M6 票 99：使用者定了門檻") != []
+
+    @pytest.mark.parametrize("mark", DECIDERS)
+    def test_a_decider_anywhere_in_the_line_is_not_caught(self, mark: str) -> None:
+        assert self.decider_problems(f"- 2026-11-12 M6 票 99：改了門檻{mark}，改 plan §1。") == []
+
+    def test_deviations_before_the_rule_need_no_decider(self) -> None:
+        assert self.decider_problems("- 2026-11-11 M6 票 99：改了門檻") == []
