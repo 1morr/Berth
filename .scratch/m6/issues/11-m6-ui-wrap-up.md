@@ -14,12 +14,14 @@
 
 1. `/impeccable critique`、`audit`、`polish` 走過上面每個畫面，桌機與 390px。
 2. 修掉的與沒修的分開記進 Comments（沒修的寫原因）；`DESIGN.md` 跟著改。
-3. 關掉 AI 時：AI 活動頁、開關、理由的空狀態說得清楚，不留壞掉的入口。
+3. M5.6 側面板拖寬沒在觸控裝置驗過（M5.6 票 10b audit）：playwright 開觸控模擬（`hasTouch`）實跑拖寬與 390px 不畫把手，結果記進 Comments（2026-11-12 M5.6 回顧）。
+4. 關掉 AI 時：AI 活動頁、開關、理由的空狀態說得清楚，不留壞掉的入口。
 
 ## 驗收
 
 - [ ] critique、audit、polish 的結論與修正在 Comments
 - [ ] playwright 實跑每個畫面，桌機與 390px，附截圖或文字結果
+- [ ] 側面板拖寬在觸控模擬下實跑過，結果在 Comments
 - [ ] 關掉 AI 的前端 e2e 綠
 - [ ] 全部檢查、vitest、前端 e2e 綠
 

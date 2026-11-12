@@ -18,7 +18,8 @@ M5.6 票 03 把 Route 改成一部作品選一次，但列的結構沒動：每�
 4. 全選／全不選、按作品收合。
 5. 字幕組的 `Options` 改成 `role="radiogroup"`，選中態加非顏色訊號；`/rss` 也用這個元件，一起看。
 6. 〈沒修〉清單裡其他的項目（按過的卡收成摘要、拒絕時給原因、同名卡的 region 名稱、相對期限、第一輪在字幕組選定後才展開）：做或不做逐條寫進 Comments。
-7. 文件：plan §7〈確認卡〉、brief §14、`DESIGN.md`。
+7. **M5.6 沒人接的兩項**（2026-11-12 M5.6 回顧，使用者同意）：`web/src/agent/ConfirmCard.tsx` 已 1286 行，改結構時照卡片種類拆檔；長卡貼底的確認列在面板 24rem 與 40rem 寬會壓到列（M5.6 票 10b audit），一起修。
+8. 文件：plan §7〈確認卡〉、brief §14、`DESIGN.md`。
 
 ## 驗收
 
@@ -26,6 +27,7 @@ M5.6 票 03 把 Route 改成一部作品選一次，但列的結構沒動：每�
 - [ ] 全選與按作品收合用得到，鍵盤操作得到（playwright，桌機與 390px，附截圖）
 - [ ] 字幕組選項是 radiogroup，`/rss` 的訂閱流程照常（vitest 與 e2e）
 - [ ] 〈沒修〉清單逐條有結論
+- [ ] `ConfirmCard.tsx` 拆檔；24rem 與 40rem 寬的長卡，確認列不壓到列（playwright 截圖）
 - [ ] 全部檢查、pytest、vitest、前端 e2e 綠
 
 ## Comments

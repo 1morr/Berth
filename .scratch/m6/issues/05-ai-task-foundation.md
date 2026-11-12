@@ -13,7 +13,7 @@ tracer bullet：一種任務型別從頭到尾跑通（規則層停在審核 →
 ## 做什麼
 
 1. **設計先行**（`mattpocock-skills:codebase-design`）：`ai_tasks` 的欄位（型別、對象、狀態、結論、理由、快取鍵、嘗試次數）、`ai_worker` 與任務型別的介面（組資料包、schema、驗證、套用各是哪一層）、決定點開關存在哪（`SettingsGroup`）、AI 的 `actor`。這個介面要讓第 06 張的第二段網搜與第 08–10 張的新型別不必改地基。結論寫進 Comments 與模組 docstring。
-2. **任務型別「審核中的 Plan」**：規則層停在 review 的 Plan，理由為 `low_confidence`、`medium_not_allowed`、`air_date_conflict`、`runtime_conflict`（程式檢查擋下的兩種，spec 合併進這一型；`target_exists` 要取代既有檔時照 C1 表留給人）。其餘理由要不要接，查定後寫進 Comments。模型改寫 Plan 的季集與分類後核准，或交給人。
+2. **任務型別「審核中的 Plan」**：規則層停在 review 的 Plan，理由為 `low_confidence`、`medium_not_allowed`、`air_date_conflict`、`runtime_conflict`（程式檢查擋下的兩種，spec 合併進這一型；`target_exists` 要取代既有檔時照 C1 表留給人）。其餘理由要不要接，查定後寫進 Comments。spec〈第一批任務型別〉只列 low 加兩種程式檢查，沒提 `medium_not_allowed`；這張定案後同一 commit 寫回 spec（2026-11-12 M5.6 回顧）。模型改寫 Plan 的季集與分類後核准，或交給人。
 3. **資料包**：plan §4.5 的內容，包括片長（`FileEntry.duration_s`、大小、TMDB `runtime`；片長偏離同組的不壓進樣本）。快取鍵 `torrent hash + 解析器版本 + prompt 版本`。
 4. **只做第一段**（不給工具）：固定 schema 的輸出，理由為 `ReasonCode` 加一欄自由文字；schema 留一種「資料不夠」的結論，這張先當成交給人。
 5. **驗證**：集在 TMDB 存在、不撞目標路徑、季集範圍、副檔名與分類一致、播出日、片長；不通過的不套用、交給人並附理由。

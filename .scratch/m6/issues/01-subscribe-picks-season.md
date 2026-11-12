@@ -12,18 +12,21 @@
 
 ## 做什麼
 
+0. **先止血，發 0.5.2**（2026-11-12 M5.6 回顧，使用者同意）：作品在 TMDB 有不只一季、或 Mikan 對到不只一頁時，卡片先問使用者是哪一季，不自己挑；測試先紅再綠。發版照第 5 步（tag 與 push 先問）。完整修法照下面 1–5 步做，修完再發一次。
 1. **先量**（`mattpocock-skills:prototype`，腳本留在 `scripts/experiments/`）：對 Mikan 實頁重量一次 brief §20.29 的兩部作品，另找一部 split-cour 被拆成兩頁、一部 Mikan 的頁比 TMDB 的季粗的作品。記下每一頁的開播日與 TMDB 各季的 `air_date` 怎麼對得上，結果補進 brief §20.29（附來源）。
 2. **定修法**：訂閱帶上「第幾季」，或比對被推薦那一季的 `air_date`（brief §20.29 的兩個方向），照第 1 步的資料選，理由寫進 Comments。對不上任何一頁、或一季對到不只一頁時怎麼辦也要定（傾向：問人，不猜）。
-3. 實作（`mattpocock-skills:tdd`）：卡片說出挑到的是哪一頁、哪一季；給模型的工具 schema 跟著改時，`test_agent_tools.py` 一起改。
+3. 實作（`mattpocock-skills:tdd`）：卡片說出挑到的是哪一頁、哪一季；卡片的參數帶上番組 id 與季，核准時照用，不再重新 `match_bangumi`（現在 `services/rss.py:2938-2943` 核准時會重找一次，站上變動時訂到的可能和卡片顯示的不同；M5.6 票 08 Comments 的取捨，票 09 已有在卡片選項藏 `kind`、`term` 的先例）；給模型的工具 schema 跟著改時，`test_agent_tools.py` 一起改。
 4. 用真模型重跑 S1 與 S6（`scripts/experiments/m5_acceptance_scenarios.py`，兩種接口），確認沒有送出舊集，數字補進研究文檔 §8。
 5. **發 0.5.2**：CHANGELOG 收成 0.5.2、`pyproject.toml` 與 `uv.lock` 同步，tag 與 push 先問使用者（照 0.5.1 那一列的做法）。
 
 ## 驗收
 
+- [ ] 止血版先發：多季作品卡片問季、不自己挑（整合測試），0.5.2 的 tag 與 push 已問過使用者
+- [ ] 核准時用卡片帶的番組 id 與季，不重新比對（整合測試：預覽後替身 Mikan 頁變動，訂到的仍是卡片上那一頁）
 - [ ] brief §20.29 的兩個情境挑到使用者要的那一季（整合測試，用替身 Mikan 頁）
 - [ ] Mikan 實頁量過一次，結果與來源在 brief §20.29；split-cour 與「頁比季粗」各有一條測試
 - [ ] 對不上或對到多頁時不自己挑（整合測試）
 - [ ] 真模型重跑 S1、S6 沒有送出舊集，數字在研究文檔
-- [ ] 全部檢查、pytest、vitest 綠；CHANGELOG 已收成 0.5.2；tag 與 push 已問過使用者
+- [ ] 全部檢查、pytest、vitest 綠；完整修法的 CHANGELOG 已收成下一版；tag 與 push 已問過使用者
 
 ## Comments
