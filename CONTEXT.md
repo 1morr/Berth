@@ -409,7 +409,7 @@ _Avoid_: queue（佇列是程序內的東西，這一張活過重啟）, outbox 
 _Avoid_: integration, webhook（webhook 是別人打進來的那一種）
 
 **AI Task**（AI 任務）:
-交給 AI 的一件事：規則層 low 的 Plan、Unmatched 檔案、待綁定的 RSS Series、offset 修正、audit、程式檢查標出的可疑入庫、Issue、巡檢標出的項目。帶資料包、允許的工具與預算，結果是「已處理」或「交給人（附理由）」。M5 起；每一種都有同一個命令的人工版本。
+交給 AI 的一件事：規則層 low 的 Plan、Unmatched 檔案、待綁定的 RSS Series、offset 修正、audit、程式檢查標出的可疑入庫、Issue、巡檢標出的項目。帶資料包、允許的工具與預算，結果是「已處理」或「交給人（附理由）」。M6 起；每一種都有同一個命令的人工版本。
 _Avoid_: job（Job 是一包 torrent）, ticket
 
 **Command Registry**（命令登錄表）:

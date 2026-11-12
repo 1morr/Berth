@@ -525,7 +525,7 @@ async def _metadata_ready(
     只看 state 不行——`checkingResumeData` 也不是 `metaDL`，但那時候清單還沒生出來；
     只看清單也不行——metaDL 期間它回的是 `200` + `[]`，與「這個 torrent 不存在」同形。
 
-    **pre-plan 不在這一票**（plan §3.1 的另一半副作用）：`plans` 表要到票 11 才建。
+    **pre-plan 不在這裡**（plan §3.1 的另一半副作用）：由 `services/plan` 的規劃迴圈算。
 
     `files` 是寫交易之前就問好的那一份（`_listings`）；這一輪沒問到的是空的，下一輪再問。
     """

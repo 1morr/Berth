@@ -400,7 +400,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
 
 - **排程**：每筆帳本自己的排程 30s → 1m → 10m → 1h → 1h → 1h，共 6 次（常數 `RESOLVE_DELAYS` 在 `services/resolve_schedule.py`，下一次時刻存在 `ledger.resolve_after`）。
   - 依據：試跑量到的上界是入庫後約 12 分鐘（brief §20.1，那是下一次反查碰巧讀到的時間），落在第 3 次附近（累計 11.5 分鐘）；還在認的第 4 次是 21.5 分鐘（受 `SCAN_SETTLE` 封頂）。
-  - 季集讀自檔名、作品讀自資料夾的 `[tmdbid-…]`，都不必連網，43 分鐘還認不完的就是認不出。
+  - 季集讀自檔名、作品讀自資料夾的 `[tmdbid-…]`，都不必連網，42 分鐘還認不完的就是認不出。
   - 間隔太長會讓真服務 e2e 的 1200 秒等不到。
 - **找 item**：用 brief §20.1 的兩段查詢，也比 `MediaSources[].Path`——第二個版本不是 item 自己的 `Path`。
 - **找到之後**：把那一條來源的 `Name` 抄進帳本（版本名是 Jellyfin 算的）。
@@ -780,7 +780,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - 匿名白名單只有三條：`auth/login`、`auth/logout`（一律成功，順便清 cookie）、`health`。
 - `setup/*` 有自己的規則：擁有者成立之前匿名可達的只有開場那幾支（`SETUP_OPENING_PATHS`）——`GET /setup/status`、`GET /setup/compose`、選 Jellyfin 與測它、`POST /setup/owner`、`POST /setup/owner/existing`；其餘精靈端點會寫別人的服務，要在門後。擁有者成立之後（精靈完成與否都一樣）整組只有 `role=admin` 進得來（非 admin 回 403）。
 - 精靈跑完之後 `setup/*` 就是設定頁的寫入端點：設定的 Jellyfin / qBittorrent / 索引站 / TMDB 那幾頁呼叫精靈的同一批命令與端點（命令冪等），不在 `settings/*` 底下另開一份。services 命令只有一份，API 也只有一份。
-- **只有 admin** 的整塊（`ADMIN_PREFIXES`，所有方法）：`settings/*`、`routes/*`、`jellyfin/libraries`、`review/*`、`issues/*`、`reconcile`、`files/*`、`rss/*`（聚合 feed 的網址帶 token，綁定會替整個家送單）、`weekly/*`。審核、修正、刪除都是 admin 的事（brief §11、`PRODUCT.md`）：`user` 送單之後碰到低信心 Plan 只能等 admin，畫面上要說得出「等管理員審核」。
+- **只有 admin** 的整塊（`ADMIN_PREFIXES`，所有方法）：`settings/*`、`routes/*`、`jellyfin/libraries`、`review/*`、`issues/*`、`reconcile`、`files/*`、`rss/*`（聚合 feed 的網址帶 token，綁定會替整個家送單）、`weekly/*`、`waiting`、`schedule/tracking`。審核、修正、刪除都是 admin 的事（brief §11、`PRODUCT.md`）：`user` 送單之後碰到低信心 Plan 只能等 admin，畫面上要說得出「等管理員審核」。
 - **只有 admin 的單一動詞**（`ADMIN_ROUTES`，`(方法, 路徑樣式)`，樣式裡的 `*` 配一段）：`DELETE /jobs/*`、`GET /jobs/*/deletion`、`POST /jobs/*/reimport`、`PUT /plans/*/items`、`POST /plans/*/approve`、`POST /plans/*/reject`。同一條路徑上它的兄弟不是 admin：`POST /jobs` 配不上，`user` 要送得了單，也要按得到重試。`GET /jobs/*/deletion`（刪除估算）與刪除同一條規則：按不到刪除的人不必替他逐一 `stat` 每一個檔案。兩份都在 `api/gate.py` 一處。
 - `routes/*` 精靈 Route 那一頁的刪除走自己的 `DELETE /setup/routes/{id}`：`routes/*` 若跟著 `setup/*` 匿名開放，精靈跑完之前的任何人都能把紅燈 Route 停用再按完成（停用的 Route 不算進完成條件）。
 - `health` 匿名可讀，回 `status`（ok / degraded）、`version` 與 `setup_completed`。`setup_completed` 掛在這裡而不是 `setup/status`：前端要在還沒有人登入時決定畫精靈還是登入頁，而精靈未完成時本來就整組匿名開放，所以它不多洩漏任何東西。
@@ -2564,6 +2564,7 @@ M0–M5.6 驗收與回顧時留下、沒有排進 M6 / M6.5 / M7 的項目。有
 | `_rescreen` 先讀再寫會把剛送出的 Item 改回 `excluded`（要條件式 `UPDATE`） | `m3.md` §11.4 收尾延後項 |
 | 全站頁面標題都是 `Berth`（`web/index.html`，沒有逐頁 `document.title`） | `m4.md` §11.5 M4 收尾遺留 |
 | 角色只在登入時更新：在 Jellyfin 降權的人，已登入的 session 可能最長 30 天仍是 admin（推斷：`read_session` 只讀本地 `users` 列）；先寫一條會紅的測試，紅了再排小票，排在 M6 票 04 之後 | M5.6 回顧（2026-11-12） |
+| 探索卡只標「追蹤中」，brief §13 寫的未追蹤／部分／完整／下載中四種沒做（`services/discover.py` 註解說等帳本）；補做或改 brief 等使用者定 | M5.6 回顧（2026-11-12） |
 | 5 分鐘的健康迴圈不跑 qBittorrent 探針（會觸發使用者「完成時執行外部程式」），掛載事後壞掉要按「重新檢查」才看得到；是取捨，留著記錄 | M5.6 回顧（2026-11-12） |
 
 ---

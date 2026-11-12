@@ -49,6 +49,7 @@ M5.6（AI 對話精簡）也已驗收，封存於 `docs/archive/m5.6.md`。
 | 2026-11-10 | M6 準備 | 使用者不逐件處理：拿掉影子模式，改對凍在 repo 的案例做 AI 評估（套用錯 0 件）；背景任務資料不夠時第二段唯讀網搜（plan §11.7、brief §14） | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-11 | M6 開工 | plan §11.7 細化成 `.scratch/m6/spec.md`、§11.7 縮成連結；拆 12 張票（第一批五種併成四型、評估與網搜同一張），票序在 spec | 新 session 下 `/implement .scratch/m6/issues/01-subscribe-picks-season.md` |
 | 2026-11-12 | M6 回顧 M5.6 | 回顧 M5.6，確認的 8 項寫回 spec 與票 01–03、05、06、08、11（見偏差）；補記兩條 M5.6 偏差、plan §11.9 加兩項 | 新 session 下 `/implement .scratch/m6/issues/01-subscribe-picks-season.md` |
+| 2026-11-12 | M6 流程 | 拿掉 `docs/overview/`，改用 `/1morr:explain` 出臨時解說頁；brief、plan、ADR 0011、CONTEXT、程式註解對齊程式碼 | 新 session 下 `/implement .scratch/m6/issues/01-subscribe-picks-season.md` |
 
 ## 偏差與決定
 

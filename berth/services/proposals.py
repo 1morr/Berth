@@ -587,8 +587,8 @@ def _settled(results: Sequence[RowResult]) -> ProposalStatus:
 
 def sends_into_a_route(spec: CommandSpec) -> bool:
     """命令把一部作品送進一條 Route（輸入有 `media_id` 與 `route_id`：送單、訂閱 Mikan、
-    關鍵字訂閱）。這一類命令的 Route 由伺服器在提出時定（M5.6 票 04）：給模型的卡片列不帶
-    `route_id`，命令本身的輸入照舊（API 與作品頁的手動送單在用）。"""
+    關鍵字訂閱、`rss.subscribe`）。這一類命令的 Route 由伺服器在提出時定（M5.6 票 04）：
+    給模型的卡片列不帶 `route_id`，命令本身的輸入照舊（API 與作品頁的手動送單在用）。"""
     return {"media_id", "route_id"} <= set(spec.input.model_fields)
 
 

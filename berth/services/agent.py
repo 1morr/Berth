@@ -6,8 +6,8 @@
 - **歷史只有伺服器寫**：`open_turn` 從 `ai_conversations` 讀，這一輪完成時存 `all_messages()`。前端
   送來的歷史、工具結果與核准都不採用（`api/agent.py` 只取最後一則使用者訊息的字）。
 - **工具來自登錄表**（`agent_tools.TOOLS`）：這一輪的人看得到哪幾個照命令的 `audience`，呼叫一律經
-  命令執行器，actor 是 `ai:<user id>`——執行器再擋一次角色。票 11 只開讀取類；寫入與確認卡在
-  票 13、14。
+  命令執行器，actor 是 `ai:<user id>`——執行器再擋一次角色。讀取類直接做，寫入一律出確認卡
+  （票 13、26）。
 - **記帳**（`_Guard`，pydantic-ai 的 capability）：每次模型呼叫寫一列 `ai_calls`、更新 `ai_runs`
   的合計並 commit；`on_complete` 在中止時不會被呼叫，所以不等它（brief §20.24）。
 - **防護**（`Limits`，plan §11.6〈防護〉）：每次 `max_tokens`、每輪模型呼叫與 token 上限、同工具同

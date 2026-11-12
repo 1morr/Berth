@@ -120,7 +120,7 @@
 
 ### 4.4 硬鏈接能力驗證【決定】
 
-- 每個 Route 建立時與每次啟動時執行：在 `complete/<route-slug>` 建暫存檔 → 真的呼叫 `link()` 鏈接到目標路徑 → 比對 inode 與 device → 刪除。失敗即 Route 標記為不健康，拒絕送單。只比 `st_dev` 不夠（同一檔案系統掛兩次、btrfs 子卷、ZFS dataset、mergerfs 都會 `EXDEV`，§20.2），所以一定實際鏈接一次。
+- 每個 Route 建立時與健康檢查每一輪（每 5 分鐘；啟動後迴圈第一次醒來若已逾期就跑）執行：在 `complete/<route-slug>` 建暫存檔 → 真的呼叫 `link()` 鏈接到目標路徑 → 比對 inode 與 device → 刪除。失敗即 Route 標記為不健康，拒絕送單。只比 `st_dev` 不夠（同一檔案系統掛兩次、btrfs 子卷、ZFS dataset、mergerfs 都會 `EXDEV`，§20.2），所以一定實際鏈接一次。
 - 也檢查：
   - 目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到。
   - **反過來 qBittorrent 讀得到本系統寫進分類路徑的探測檔**（探針 torrent 校驗到 100%，§20.2）。
@@ -319,7 +319,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 目標是「AI native，出錯幾乎不需要人工處理」（§14、[ADR-0008](adr/0008-ai-autonomy-and-optional-ai.md)）。AI 解析是 M5 的第一種 AI 任務。
 
-- **三層漏斗**：規則層（解析器、比對）是主力——免費、確定、有 benchmark 守著；AI 只接規則層的例外；人只處理 AI 交上來的與不可撤銷的。AI 掛掉或超出預算時退回沒有 AI 的行為，系統照樣能用。
+- **三層漏斗**：規則層（解析器、比對）是主力——免費、確定、有 benchmark 守著；AI 只接規則層的例外；人只處理 AI 交上來的與不可撤銷的。AI 掛掉或碰到防護上限時退回沒有 AI 的行為，系統照樣能用。
 - **規則層自己知道沒把握的**（信心 low、Unmatched、目標衝突、RSS Series 待綁定）→ 開一個 AI 任務，而不是直接進審核。
 - **規則層有把握卻錯了的**（high / medium 入錯）規則層自己看不出來，靠不花 token 的程式檢查抓（plan §11.4）：
   - **播出日比對**（Feed Item 的發佈時間對換算出的那一集的播出日，抓集數與 offset 算錯——主要的一道）。
@@ -652,7 +652,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 審核佇列 | 人工介入 | 低信心 Plan（逐檔可改）、已入庫待確認（medium 自動入庫的 audit 清單，可一鍵撤銷；同一個 Job 一組一顆「全部確認」、整段一顆，收起時說出為什麼是 medium）、Unmatched、重複版本；批次核准。**Issue 不在這裡**：只在 `/issues`，這一頁原位一行「另有 N 件待處理」連過去。**一列一件事的清單，不是牆**：篩出來常常只有一兩件，卡片牆說不出「有幾件事在等你」。只有 admin 進得來 |
 | 訂閱（RSS，`/rss`） | 自動化 | Feed 清單、RSS Series 清單（待綁定排最前、就地綁定作品與 Route）、最近的 Feed Item、一次性 RSS 連結、新 Feed 的第一輪預覽（§15） |
 | 健康與問題 | 維運 | 服務連線、Route 硬鏈接檢查、Reconciler 結果、磁碟空間 |
-| 設定 | 管理 | 一格泊位一頁（Jellyfin、qBittorrent、媒體庫路徑、索引站、TMDB），與精靈共用元件與命令：服務位址與憑證、索引站、TMDB key、Route；之後加命名詞彙、解析與 AI 開關與預算、使用者角色 |
+| 設定 | 管理 | 一格泊位一頁（Jellyfin、qBittorrent、媒體庫路徑、索引站、TMDB），與精靈共用元件與命令：服務位址與憑證、索引站、TMDB key、Route；之後加命名詞彙、解析與 AI 開關、使用者角色 |
 
 Media 詳情各塊的規則：
 
@@ -680,7 +680,7 @@ Media 詳情各塊的規則：
   - 沒有 AI 時要靠規則、批次動作與通知把人工降到最少。
 - **三層漏斗**（[ADR-0008](adr/0008-ai-autonomy-and-optional-ai.md)）：規則層 → AI → 人（§6.10）。沒有 AI 時是兩層：播出日比對、片長驗證與 Jellyfin 回驗（M3），加上每日檢查與通知（M4），都不靠 AI。
 - **自主權看可不可以撤銷**：每個命令在**命令登錄表**裡標明副作用等級（讀取 / 可逆 / 不可逆）與反向命令。
-  - 可逆的（綁定作品、改季號與 offset、核准或改寫計劃、rematch、確認 audit、重試、recheck、重新反查、在預算與磁碟門檻內補下載）通過驗證後 AI 自己做。
+  - 可逆的（綁定作品、改季號與 offset、核准或改寫計劃、rematch、確認 audit、重試、recheck、重新反查、在 torrent 數與磁碟門檻內補下載）通過驗證後 AI 自己做。
   - 不可逆的（刪 complete 檔案、移除 torrent、purge）與改設定、Route **永遠要人**，做成 Proposal。判斷是 `services/commands.py` 的 `needs_person`：標記是 `irreversible`，或帶「連到新位址」「對外發訊息」「改設定」任一個旗標。
   - 「忽略 Issue」會把問題藏起來，也做成 Proposal。
   - 新增的命令都要先標好等級、反向命令與旗標。
@@ -1389,7 +1389,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 **AutoBangumi 現況（main，2026-08）**：
 
 - 解析輸出 `ParsedRelease`（title_en / zh / jp、group、season、episode、episode_end、media_type、release_kind(SINGLE|RANGE|BATCH|COLLECTION)、resolution、source、subtitle、codecs、audio、version、tags、evidence）；§6.3 的欄位設計與此對齊。
-- LLM 解析支援 OpenAI / Anthropic / Gemini，`primary` 與 `fallback` 兩種模式（記憶體快取、斷路器、併發上限）；§6.10 與其 `fallback` 一致，並多加 schema 驗證與預算。
+- LLM 解析支援 OpenAI / Anthropic / Gemini，`primary` 與 `fallback` 兩種模式（記憶體快取、斷路器、併發上限）；§6.10 與其 `fallback` 一致，並多加 schema 驗證與防護上限（ADR 0016 不設月預算）。
 - `offset_detector.py`：以 TMDB 各集 `air_date`、播出間隔 > 6 個月切「虛擬季」算 season_offset / episode_offset。
 - 明確限制：**不支援合集 / 批次**、OVA 與電影 RSS 不支援、路徑必須是 `Title/Season X/`——正是 §6.6 要超越的地方。
 - RSS 預設過濾 regex `720|\d+-\d+`；建議一部作品只訂一個字幕組；§15 的 Rule 預設沿用「排除合集、字幕組白名單」。

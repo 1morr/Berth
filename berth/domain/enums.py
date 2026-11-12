@@ -1768,7 +1768,7 @@ class NotificationKind(StrEnum):
 
     #: 「可以看了」：一筆 Job 的正片在 Jellyfin 全部認出來了（`jellyfin_item_resolved`）。
     READY = "ready"
-    #: 「正在下載」：RSS 一輪送出的、人手按的下載（票 126 排）。票 125 先讓人勾、存下訂閱。
+    #: 「正在下載」：RSS 一輪送出的、人手按的下載（`services/downloading`，M4 票 126）。
     DOWNLOADING = "downloading"
     #: 「有 N 件等你處理」：待審核、開著的 Issue、待綁定的 RSS Series 有新的一件（M4 票 127）。
     #: 只送管理員（`ADMIN_ONLY_KINDS`）。
