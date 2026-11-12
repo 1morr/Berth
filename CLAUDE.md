@@ -11,7 +11,6 @@
 - `.scratch/<里程碑>/issues/`：票，執行單位；狀態在票的 `Status:` 行。
 - `CONTEXT.md`：名詞表，唯一來源；命名一律用它的詞。
 - `PRODUCT.md`、`DESIGN.md`：impeccable 維護的產品與設計脈絡（第一個 UI 票起）。
-- `docs/overview/`：給使用者看的導覽（原理、架構圖、功能、決定清單），`/1morr:checkpoint` 在里程碑之間更新；agent 以上面的原文件與程式碼為準。
 
 ## 每個 session 的流程
 
@@ -25,7 +24,7 @@
 
 完成標準：票上每個驗收條件打勾、全部檢查與 test 綠燈、progress.md 已更新、已 commit。缺一就還沒完成。
 
-**所有 session 的結尾**（做票、訪談、寫 plan、里程碑開工都算）：告訴使用者下一步要在新 session 下的完整指令，並把同一句寫進 progress.md 那一列的「下一步」（`tests/unit/test_progress_rules.py` 守最後一列）。下一張票是 `/implement <票路徑>`，里程碑做完是 `/1morr:checkpoint <剛做完的里程碑>`（回顧、更新導覽；它結束時寫 `/to-tickets docs/plan.md 拆 <下一個里程碑> 的票`）；要使用者先決定才能繼續時，寫 `等使用者：<要決定什麼>`。
+**所有 session 的結尾**（做票、訪談、寫 plan、里程碑開工都算）：告訴使用者下一步要在新 session 下的完整指令，並把同一句寫進 progress.md 那一列的「下一步」（`tests/unit/test_progress_rules.py` 守最後一列）。下一張票是 `/implement <票路徑>`，里程碑做完是 `/1morr:checkpoint <剛做完的里程碑>`（回顧上一段、和使用者對齊下一段；它結束時寫 `/to-tickets docs/plan.md 拆 <下一個里程碑> 的票`）；要使用者先決定才能繼續時，寫 `等使用者：<要決定什麼>`。
 
 ## 事實與查證
 
