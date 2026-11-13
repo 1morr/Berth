@@ -37,7 +37,8 @@ DECIDER_SINCE = "2026-11-12"
 
 
 def _section(text: str, heading: str) -> list[str]:
-    parts = text.split(f"## {heading}", 1)
+    """`## heading` 那一段的內容；只認行首的標題，內文裡提到同樣的字不算。"""
+    parts = re.split(rf"(?m)^## {re.escape(heading)}[ \t]*$", text, maxsplit=1)
     return parts[1].split("\n## ", 1)[0].splitlines() if len(parts) == 2 else []
 
 
@@ -161,6 +162,13 @@ class TestTheGatesThemselves:
         )
         progress = self.with_row("| 2026-10-31 | M6 1 甲 | 結果 | `/implement 甲` |")
         assert any("M6" in item for item in problems(progress, roadmap, self.decisions()))
+
+    def test_a_heading_quoted_inside_a_rule_is_not_the_section(self) -> None:
+        quoted = "- 封存時搬到 `## Session 紀錄` 與 `## 紀錄`。\n"
+        progress = self.text().replace("## 寫法與封存\n", "## 寫法與封存\n\n" + quoted, 1)
+        row = "| 2026-10-31 | 99 沒標里程碑 | 結果 | `/implement 甲` |"
+        found = problems(progress.rstrip("\n") + f"\n{row}\n", self.roadmap(), self.decisions())
+        assert any("沒有標里程碑表裡的里程碑" in item for item in found)
 
     def test_an_extra_or_repeated_section_is_caught(self) -> None:
         assert any("## 段" in item for item in self.check(self.text() + "\n## 偏差與決定\n"))
