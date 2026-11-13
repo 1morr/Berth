@@ -5,8 +5,7 @@
 - session 紀錄的每一列、決定的每一條，整行 ≤ 200 字（Python `len`）。
 - 每一列 / 每一條開頭標 `docs/roadmap.md` 里程碑表裡的里程碑：票欄 `<里程碑> <票號> <短標題>`，
   決定 `- <日期> <里程碑> 票 <NN>：…`。
-- session 紀錄標的里程碑不是「已驗收」：已驗收的搬去 `docs/archive/<里程碑>.md`。
-  決定不封存，不受這條限制。
+- 標的里程碑不是「已驗收」：已驗收的，列與決定都搬去 `docs/archive/<里程碑>.md`。
 - session 紀錄最後一列的「下一步」含反引號包住、`/` 開頭的指令，或以 `等使用者：` 開頭。
   紀錄是空的不算違規（封存後會空）。
 - 2026-11-12 起的決定標決定者：`（使用者定）`、`（使用者同意）` 或 `（Agent 定）`。
@@ -72,19 +71,19 @@ def problems(progress: str, roadmap: str, decisions: str) -> list[str]:
     if len(tables) > 1:
         found.append(f"session 紀錄應該是一整張表，實際被空行切成 {len(tables)} 段")
 
-    def check(line: str, tag: str | None, archived: bool) -> None:
+    def check(line: str, tag: str | None) -> None:
         shown = line[:60]
         if len(line) > MAX_LENGTH:
             found.append(f"{len(line)} 字，上限 {MAX_LENGTH}：{shown}")
         if tag not in known:
             found.append(f"開頭沒有標里程碑表裡的里程碑（{tag}）：{shown}")
-        elif archived and tag in accepted:
+        elif tag in accepted:
             found.append(f"{tag} 已驗收，該搬去 docs/archive：{shown}")
 
     rows = [line for line in _section(progress, "Session 紀錄") if _ROW.match(line)]
     for line in rows:
         ticket = line.split("|")[2].strip()
-        check(line, ticket.split(" ")[0], archived=True)
+        check(line, ticket.split(" ")[0])
     if rows:
         next_step = rows[-1].rstrip().rstrip("|").rsplit("|", 1)[-1].strip()
         if not (_COMMAND.search(next_step) or next_step.startswith(_WAITING)):
@@ -92,7 +91,7 @@ def problems(progress: str, roadmap: str, decisions: str) -> list[str]:
     for line in _section(decisions, "紀錄"):
         if line.startswith("- "):
             match = _DECISION.match(line)
-            check(line, match.group(1) if match else None, archived=False)
+            check(line, match.group(1) if match else None)
             if line[2:12] >= DECIDER_SINCE and not any(mark in line for mark in DECIDERS):
                 found.append(f"沒標決定者（{'、'.join(DECIDERS)}）：{line[:60]}")
     return found
@@ -151,8 +150,10 @@ class TestTheGatesThemselves:
         row = "| 2026-10-31 | M4 999 已驗收的里程碑 | 結果 | 下一步 |"
         assert any("已驗收" in item for item in self.check(self.with_row(row)))
 
-    def test_a_decision_for_an_accepted_milestone_stays(self) -> None:
-        assert self.check(decision="- 2026-10-31 M4 票 999：決定不跟著封存") == []
+    def test_a_decision_for_an_accepted_milestone_is_caught(self) -> None:
+        assert any(
+            "已驗收" in item for item in self.check(decision="- 2026-10-31 M4 票 999：已驗收")
+        )
 
     def test_a_milestone_missing_from_the_table_is_caught(self) -> None:
         roadmap = "\n".join(
