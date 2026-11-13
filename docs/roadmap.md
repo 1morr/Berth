@@ -21,7 +21,7 @@
 | docs-diet | 文件瘦身 | `.scratch/docs-diet/issues/` | — | 已驗收（2026-10-30），封存於 `docs/archive/docs-diet.md` |
 | docs-diet-2 | brief 與 plan 瘦身 | `.scratch/docs-diet-2/issues/` | `.scratch/docs-diet-2/spec.md` | 未開工。9 張票已拆，和 M6 的票互不相擋；用 `/1morr:ticket-coordinator .scratch/docs-diet-2/issues` 跑 |
 
-開工：使用者在新 session 下 `/to-tickets docs/roadmap.md 拆 <里程碑> 的票`，那個 session 寫 `.scratch/<里程碑>/spec.md`、把本檔它那一節縮成連結、拆票，步驟在 `CLAUDE.md`〈Skills〉。沒開工的里程碑只在本檔；開工後以 spec 與票為準。
+開工：使用者在新 session 下 `/to-tickets docs/roadmap.md 拆 <里程碑> 的票`，那個 session 寫 `.scratch/<里程碑>/spec.md`、把本檔它那一節縮成連結、拆票，步驟在 `AGENTS.md`〈Skills〉。沒開工的里程碑只在本檔；開工後以 spec 與票為準。
 
 ## M6 人工接管開關
 

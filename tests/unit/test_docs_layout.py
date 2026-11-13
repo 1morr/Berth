@@ -1,7 +1,7 @@
-"""`docs/` 第一層的每個檔與資料夾，名字都出現在 `CLAUDE.md`。
+"""`docs/` 第一層的每個檔與資料夾，名字都出現在 `AGENTS.md`。
 
 指令檔沒提到的文件，agent 不知道它存在；固定的檔名與位置也讓別的 skill 找得到檔
-（`CLAUDE.md`〈文件〉）。資料夾比對 `名字/`，檔案比對完整檔名；只看有沒有出現，不比措辭。
+（`AGENTS.md`〈文件〉）。資料夾比對 `名字/`，檔案比對完整檔名；只看有沒有出現，不比措辭。
 `docs/research/` 第一層檔名裡的日期放在最後（`<主題>-YYYY-MM-DD`）。
 """
 
@@ -34,7 +34,7 @@ def misdated(research: Path) -> list[str]:
 
 
 def test_every_top_level_doc_is_listed_in_the_instructions() -> None:
-    assert unlisted(ROOT / "docs", (ROOT / "CLAUDE.md").read_text(encoding="utf-8")) == []
+    assert unlisted(ROOT / "docs", (ROOT / "AGENTS.md").read_text(encoding="utf-8")) == []
 
 
 def test_dated_research_files_end_with_the_date() -> None:

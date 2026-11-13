@@ -4,11 +4,11 @@
 
 **Blocked by:** 03、07、08、09、10
 
-**讀:** spec〈共同規則〉；`CLAUDE.md`〈UI〉；`PRODUCT.md`、`DESIGN.md`；`.scratch/m5.6/issues/10-m5.6-ui-wrap-up.md`（上一次收尾的做法）
+**讀:** spec〈共同規則〉；`AGENTS.md`〈UI〉；`PRODUCT.md`、`DESIGN.md`；`.scratch/m5.6/issues/10-m5.6-ui-wrap-up.md`（上一次收尾的做法）
 
 ## 為什麼
 
-`CLAUDE.md`〈UI〉：每個里程碑 UI 收尾前跑 `critique`、`audit`、`polish`。M6 動到的畫面有確認卡、Issue 頁、AI 設定頁的開關、AI 活動頁、審核頁的 AI 理由、週報。
+`AGENTS.md`〈UI〉：每個里程碑 UI 收尾前跑 `critique`、`audit`、`polish`。M6 動到的畫面有確認卡、Issue 頁、AI 設定頁的開關、AI 活動頁、審核頁的 AI 理由、週報。
 
 ## 做什麼
 

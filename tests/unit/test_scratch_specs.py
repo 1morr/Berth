@@ -1,11 +1,11 @@
-"""`.scratch/` 下沒驗收的目錄，都是開工 session 做完三步的結果（`CLAUDE.md`〈Skills〉）。
+"""`.scratch/` 下沒驗收的目錄，都是開工 session 做完三步的結果（`AGENTS.md`〈Skills〉）。
 
 - 同時有含五段的 `spec.md` 和 `issues/` 裡至少一張票：擋掉「有票沒 spec」和「還沒開工就預建 spec」。
 - 它在 `docs/roadmap.md` 的那一節縮成一行、連到 spec：內容只留一份。
   roadmap 裡沒有這一節的目錄（docs-diet 這類）不查。
 - 在 roadmap 有一節的里程碑，`issues/` 裡有一張 `-acceptance.md` 結尾的驗收票；只看有沒有，
   不看編號（驗收後補的票照樣放行）。它的 spec 有一個「使用者試」標題：驗收票封存前
-  使用者要親手試的清單（`CLAUDE.md`〈每個 session 的流程〉第 5 步）。
+  使用者要親手試的清單（`AGENTS.md`〈每個 session 的流程〉第 5 步）。
 
 「已驗收」與目錄名都讀 `docs/roadmap.md` 的里程碑表：M0–M5 與 docs-diet 是歷史快照，
 新增里程碑不必改這裡。只比段落標題與連結，不比措辭；標題層級、多的段落、旁邊的 shape 檔

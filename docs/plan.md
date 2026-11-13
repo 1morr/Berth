@@ -13,7 +13,7 @@
 - 語言：程式碼、識別符、commit、log 一律英文；文件與註解繁體中文。例外是給使用者的 README 與 `docs/guide/`：README 英文為主、`README.zh-Hant.md` 是同內容的繁中版，guide 英文。
 - Commit：Conventional Commits，subject ≤ 72 字元。分支 `feat/…`、`fix/…`、`docs/…`。
 - 每個里程碑結束時 `main` 可部署、CI 綠燈、README 可照著跑。
-- 改動指令、環境變數、目錄結構、對外介面或資料格式時，同輪更新 README（兩份）與 `docs/guide/`（使用者）、`docs/development.md`、`docs/development/`（開發指令）、`.env.example`、CHANGELOG、專案 `CLAUDE.md`。
+- 改動指令、環境變數、目錄結構、對外介面或資料格式時，同輪更新 README（兩份）與 `docs/guide/`（使用者）、`docs/development.md`、`docs/development/`（開發指令）、`.env.example`、CHANGELOG、專案 `AGENTS.md`。
 - 型別：後端 mypy strict（第三方缺型別時局部放寬並註明）；前端 TypeScript strict。
 - 行為變更同步補測試；解析器改動必跑 benchmark（§4.6）。
 
@@ -2404,7 +2404,7 @@ services:
 - 一個流程一個 spec（`web/e2e/*.spec.ts`），`web/playwright.config.ts` 的每一列是一個 spec、一個演練情境、一個 port；要進閘門的新流程就加一個 spec 與一列。
 - 多數流程在 1280 與 390 兩種寬度各走一次（config 裡帶 `-390` 的列），每一格留整頁截圖。
 - 一條流程一台 server、不重試（替身有狀態）；失敗時截圖與 trace 上傳成 artifact。
-- 沒有 spec 的頁面：UI 驗證是每張票用 playwright MCP 對演練情境實跑，把結果貼進票與 progress.md（`CLAUDE.md` 的規則）。
+- 沒有 spec 的頁面：UI 驗證是每張票用 playwright MCP 對演練情境實跑，把結果貼進票與 progress.md（`AGENTS.md` 的規則）。
 
 ### e2e
 
@@ -2467,7 +2467,7 @@ services:
 
 ## 11. 里程碑任務
 
-任務 ID `T<里程碑>.<序號>`，每個任務都有驗收。順序即建議開工順序，同一里程碑內標 ∥ 的可平行。本節是路線圖：沒開工的里程碑各一小節；開工 session（使用者下 `/to-tickets docs/plan.md 拆 <里程碑> 的票`，做法在 `CLAUDE.md`〈Skills〉）把那一節細化成 `.scratch/<里程碑>/spec.md`，這裡留標題與編號，內文縮成一行連到 spec（程式碼引用 §11.x，編號不能變）。之後的驗收來源是 spec，執行單位是 `.scratch/<里程碑>/issues/` 的票，本節不逐條維護狀態。M0–M5 沒有 spec，內容封存在 `docs/archive/`。
+任務 ID `T<里程碑>.<序號>`，每個任務都有驗收。順序即建議開工順序，同一里程碑內標 ∥ 的可平行。本節是路線圖：沒開工的里程碑各一小節；開工 session（使用者下 `/to-tickets docs/plan.md 拆 <里程碑> 的票`，做法在 `AGENTS.md`〈Skills〉）把那一節細化成 `.scratch/<里程碑>/spec.md`，這裡留標題與編號，內文縮成一行連到 spec（程式碼引用 §11.x，編號不能變）。之後的驗收來源是 spec，執行單位是 `.scratch/<里程碑>/issues/` 的票，本節不逐條維護狀態。M0–M5 沒有 spec，內容封存在 `docs/archive/`。
 
 ### 11.1 M0 骨架
 

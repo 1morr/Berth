@@ -1,6 +1,6 @@
 # docs-diet-2 — brief 與 plan 瘦身
 
-不是里程碑：規格就是本檔（使用者 2026-11-13 同意）。不改產品行為；只動 `docs/`、`ARCHITECTURE.md`、`CLAUDE.md`、`tests/unit/` 裡守文件的測試、`.scratch/docs-diet-2/`，以及 `berth/`、`web/` 裡指向文件的註解與字串。
+不是里程碑：規格就是本檔（使用者 2026-11-13 同意）。不改產品行為；只動 `docs/`、`ARCHITECTURE.md`、`AGENTS.md`、`tests/unit/` 裡守文件的測試、`.scratch/docs-diet-2/`，以及 `berth/`、`web/` 裡指向文件的註解與字串。
 
 ## 量測（2026-11-13）
 
