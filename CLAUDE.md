@@ -5,13 +5,15 @@
 ## 文件
 
 - `docs/design-brief.md`：需求與決定。決定衝突時以它為準。
-- `docs/research/facts-*.md`：查證過的外部事實，節號沿用 brief §20.x；索引在 brief §20。
+- `docs/research/`：一層，檔名三種：`facts-<主題>.md` 是查證過的外部事實（節號沿用 brief §20.x，索引在 brief §20）；`<主題>.md` 是會更新的主題整理；`<主題>-<YYYY-MM-DD>` 是寫完就凍結的調查、試用或實驗紀錄。
 - `docs/plan.md`：架構、資料模型、狀態機、解析器、API（`.scratch/docs-diet-2/` 做完後縮成根目錄的 `ARCHITECTURE.md`）。
 - `docs/roadmap.md`：里程碑的順序、狀態與閱讀指引；沒開工的里程碑各一小節，開工後縮成一行連到 spec；〈不排里程碑〉收沒人接的遺留。
 - `docs/progress.md`：進行中里程碑的 session 紀錄。每個 session 的起點與終點。已驗收的里程碑封存在 `docs/archive/<里程碑>.md`。
 - `docs/decisions.md`：進行中里程碑的決策紀錄，一條一行，標決定者；驗收後跟著封存。
 - `.scratch/<里程碑>/spec.md`：進行中里程碑的規格，開工 session 寫（M5.5 起；`tests/unit/test_scratch_specs.py` 守）。
 - `.scratch/<里程碑>/issues/`：票，執行單位；狀態在票的 `Status:` 行。
+- `docs/adr/`：架構決定；`docs/agents/`：給工程 skill 讀的票慣例；`docs/guide/`：給使用者的部署與操作說明（英文）；`docs/assets/`：README 與 guide 用的圖；`docs/development.md` 與 `docs/development/`：開發指令。
+- 上面這些檔名與位置是固定的，別的 skill 靠它們找檔。`docs/` 第一層每多一個檔或資料夾，就在這一段加一行（`tests/unit/test_docs_layout.py` 擋）；不再維護的搬進 `docs/legacy/`。
 - `CONTEXT.md`：名詞表，唯一來源；命名一律用它的詞。
 - `PRODUCT.md`、`DESIGN.md`：impeccable 維護的產品與設計脈絡（第一個 UI 票起）。
 
