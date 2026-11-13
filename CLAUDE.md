@@ -12,6 +12,13 @@
 - `CONTEXT.md`：名詞表，唯一來源；命名一律用它的詞。
 - `PRODUCT.md`、`DESIGN.md`：impeccable 維護的產品與設計脈絡（第一個 UI 票起）。
 
+## 使用者確認
+
+- brief、plan、ADR、`CONTEXT.md` 裡的決定：草稿先給使用者看，確認後才寫入。
+- 做票時要推翻已定的決定（brief、plan、ADR、spec、先前的偏差）：停下來問使用者。同意後，同一 commit 改文件，並記一條偏差（≤ 200 字，帶里程碑標記與決定者，寫法在 progress.md〈寫法與封存〉）。
+- 問使用者決定（對話裡，或 progress.md 的 `等使用者：`）：每題寫成沒讀過票也看得懂的話，依序是背景一句、選項、你的建議、不決定會卡住什麼；票號、函式名、章節號後面跟一句它是什麼。
+- 使用者回「照建議」，只算同意這一則訊息裡列出來的那幾題。
+
 ## 每個 session 的流程
 
 工作單位是**票**：`.scratch/<里程碑>/issues/NN-slug.md`，由使用者在新 session 下 `/to-tickets docs/plan.md 拆 <里程碑> 的票` 產生（里程碑開工，見〈Skills〉）。一個 session 只做一張票。
@@ -19,12 +26,12 @@
 1. 讀 `docs/progress.md`（只含進行中的里程碑，讀得完；M0–M5 在 `docs/archive/`，按需查），再讀該里程碑的 `spec.md` 與票；只讀票列出的 plan / brief 章節，其他按需讀。
 2. `/implement <票路徑>`：tdd、定期 typecheck、結尾 `/code-review <開工時的 commit>`、commit。
 3. 驗證：`docs/development.md`〈全部檢查〉（`pre-commit run --all-files`：lint、type 與檔案衛生）加 test；貼指令輸出。
-4. 實作若推翻 plan 或 brief，同一 commit 改文件，並在 progress.md「偏差與決定」記一條（≤ 200 字，帶里程碑標記與決定者，寫法在 progress.md〈寫法與封存〉）；新 ADR（0017 起）寫一行 `決定者：使用者定`、`使用者同意` 或 `Agent 定`（`tests/unit/test_adr_rules.py` 守）；票內的取捨記在票的 `## Comments`。
-5. 票的 `Status:` 改為 `done`、勾掉驗收條件、code-review 未處理的發現記到票的 `## Comments`；progress.md 加一列 session 紀錄（≤ 200 字，帶里程碑標記；每列每條的字數與標記由 `tests/unit/test_progress_rules.py` 守）；驗收票多一步「封存這個里程碑」（做法在 progress.md〈寫法與封存〉，用 `scripts/docs_moved_lines.py` 證明沒丟；封存後 session 紀錄加一列 `<下一個里程碑> 準備`，「下一步」寫 `/1morr:checkpoint <這個里程碑>`，沒有下一個里程碑就留空、只在對話告訴使用者）；commit。
+4. 要推翻已定的決定照〈使用者確認〉；新 ADR（0017 起）寫一行 `決定者：使用者定`、`使用者同意` 或 `Agent 定`（`tests/unit/test_adr_rules.py` 守）；票內的取捨記在票的 `## Comments`。
+5. 票的 `Status:` 改為 `done`、勾掉驗收條件、code-review 未處理的發現記到票的 `## Comments`；Comments 最後加一行 `Session 紀錄：<做了什麼，一句>`，使用者同意過的偏差各加一行 `偏差：<內容與決定者>`；commit。票的分支不改 progress.md（平行的票都改它會互撞）：合併的人（使用者自己開的 session 是它自己，`/1morr:ticket-coordinator` 開的是協調者）合併後在 main 把那兩種行抄成 progress.md 的一列（≤ 200 字，帶里程碑標記與下一步）與各一條偏差，`tests/unit/test_progress_rules.py` 守格式。驗收票不會平行，自己改 progress.md，並多兩步：先「使用者試」（把啟動方式與 spec〈驗收〉`### 使用者試` 的清單給使用者，「下一步」寫 `等使用者：試用 <里程碑>`，使用者說可以才往下；不滿意的開修復票），再「封存這個里程碑」（做法在 progress.md〈寫法與封存〉，用 `scripts/docs_moved_lines.py` 證明沒丟；封存後 session 紀錄加一列 `<下一個里程碑> 準備`，「下一步」寫 `/1morr:checkpoint <這個里程碑>`，沒有下一個里程碑就留空、只在對話告訴使用者）；commit。
 
-完成標準：票上每個驗收條件打勾、全部檢查與 test 綠燈、progress.md 已更新、已 commit。缺一就還沒完成。
+完成標準：票上每個驗收條件打勾、全部檢查與 test 綠燈、Comments 有 `Session 紀錄：` 一行、已 commit。缺一就還沒完成。
 
-**所有 session 的結尾**（做票、訪談、寫 plan、里程碑開工都算）：告訴使用者下一步要在新 session 下的完整指令，並把同一句寫進 progress.md 那一列的「下一步」（`tests/unit/test_progress_rules.py` 守最後一列）。下一張票是 `/implement <票路徑>`，里程碑做完是 `/1morr:checkpoint <剛做完的里程碑>`（回顧上一段、和使用者對齊下一段；它結束時寫 `/to-tickets docs/plan.md 拆 <下一個里程碑> 的票`）；要使用者先決定才能繼續時，寫 `等使用者：<要決定什麼>`。
+**所有 session 的結尾**（做票、訪談、寫 plan、里程碑開工都算）：告訴使用者下一步要在新 session 下的完整指令，寫 progress.md 的人把同一句寫進那一列的「下一步」（`tests/unit/test_progress_rules.py` 守最後一列）。下一張票是 `/implement <票路徑>`，里程碑做完是 `/1morr:checkpoint <剛做完的里程碑>`（回顧上一段、和使用者對齊下一段；它結束時寫 `/to-tickets docs/plan.md 拆 <下一個里程碑> 的票`）；要使用者先決定才能繼續時，寫 `等使用者：<要決定什麼>`。
 
 ## 事實與查證
 
@@ -35,7 +42,7 @@
 ## 上下文紀律
 
 - 讀大檔案、查文件、跑實驗交給子代理回摘要（模型規則見全域 CLAUDE.md）。
-- brief 與 plan 各 500+ 行，只讀任務指到的章節。
+- brief 與 plan 只讀任務指到的章節。新寫的程式碼與測試不引用它們的章節號、它們也不新增票號：現有的數量只能減（`tests/unit/test_doc_ratchets.py`）；要指向文件就引 ADR 編號或寫出理由。
 - 對話已長或一個任務碰了十幾個檔案：把進度與下一步寫進 progress.md，結束 session。
 
 ## 架構規則（細節在 plan §1）
@@ -54,8 +61,8 @@
 ## Skills
 
 - 里程碑開工：入口是使用者在新 session 下 `/to-tickets docs/plan.md 拆 <里程碑> 的票`。這個 session 依序做完三步，第 3 步 commit 後才算完成：
-  1. 把 plan §11 裡它的那一節，依最新的 brief、plan 與上一個里程碑的結果細化成 `.scratch/<里程碑>/spec.md`，段落為〈目標〉〈範圍〉〈共同規則〉〈驗收〉〈票序〉。plan 那一節的內容搬進 spec，標題與章節編號留著，內文縮成一行連結（程式碼引用 §11.x，編號不能變）。文件不足以寫出 spec 時，問使用者並補進文件。
-  2. 照 skill 提出切法，使用者同意後寫票，每張票寫明「讀：plan §x、brief §y」與驗收條件。最後一張固定是**驗收票** `NN-<里程碑>-acceptance`，被其他所有票擋：spec〈驗收〉逐條對到證據、里程碑 code-review、各票 Comments 逐條歸到修掉、延後或不做，最後封存（第 5 步）；`tests/unit/test_scratch_specs.py` 守它存在。
+  1. 把 plan §11 裡它的那一節，依最新的 brief、plan 與上一個里程碑的結果細化成 `.scratch/<里程碑>/spec.md`，段落為〈目標〉〈範圍〉〈共同規則〉〈驗收〉〈票序〉；〈驗收〉底下有 `### 使用者試`：使用者親手試什麼、怎麼啟動，沒有就寫「無」和理由。plan 那一節的內容搬進 spec，標題與章節編號留著，內文縮成一行連結（程式碼引用 §11.x，編號不能變）。文件不足以寫出 spec 時，問使用者並補進文件。
+  2. 照 skill 提出切法，使用者同意後寫票，每張票寫明「讀：plan §x、brief §y」與驗收條件。最後一張固定是**驗收票** `NN-<里程碑>-acceptance`，被其他所有票擋：spec〈驗收〉逐條對到證據、里程碑 code-review、各票 Comments 逐條歸到修掉、延後或不做、使用者試，最後封存（第 5 步）；`tests/unit/test_scratch_specs.py` 守它存在。
   3. 票序寫回 spec〈票序〉，progress.md 加一列 session 紀錄，commit。
 - 之後的里程碑留在 plan，開工時才有 spec。
 - `parser`、`naming`、`domain`、`services` 的新功能與修 bug：`mattpocock-skills:tdd`（紅 → 綠 → 重構，benchmark fixture 就是紅燈）。

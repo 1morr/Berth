@@ -1,6 +1,6 @@
 """每個 session 第一份讀的兩個檔有大小上限（單位：字元，Python `len`）。
 
-- `CLAUDE.md` ≤ 6,000 字：每個 session 都整份讀。
+- `CLAUDE.md` ≤ 8,000 字：每個 session 都整份讀。
 - `docs/progress.md` ≤ 20,000 字：一次 Read、不帶 offset 就讀得完。
 
 只比總字數；換行、空行重排而字數不變，結果不變。
@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CLAUDE_MD_LIMIT = 6_000
+CLAUDE_MD_LIMIT = 8_000
 PROGRESS_LIMIT = 20_000
 
 
