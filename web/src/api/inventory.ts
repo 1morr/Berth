@@ -7,7 +7,7 @@ import type { Schemas } from './schemas'
 /**
  * 媒體庫（`berth/api/inventory.py`、票 13、M1.5 票 03）。
  *
- * 後端叫 inventory、畫面叫「媒體庫」：`CONTEXT.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端的
+ * 後端叫 inventory、畫面叫「媒體庫」：`GLOSSARY.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端的
  * 媒體庫。一個 Jellyfin 媒體庫一頁；這位使用者看得到哪幾個由後端的權限閘門決定，前端不知道他的
  * Jellyfin id，也不送任何 id。
  */

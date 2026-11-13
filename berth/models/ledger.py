@@ -1,4 +1,4 @@
-"""帳本：一條「來源檔案 → 目標硬鏈接」的紀錄（plan §2.3、brief §7.9、CONTEXT.md 的 Ledger Entry）。
+"""帳本：一條「來源檔案 → 目標硬鏈接」的紀錄（plan §2.3、brief §7.9、GLOSSARY.md 的 Ledger Entry）。
 
 **帳本是 Berth 的核心資產**（brief §7.9）：沒有它就回答不了「這個媒體庫檔案來自哪個
 torrent」「這個 torrent 入庫到哪」「哪些鏈接斷了」。所以這一列的形狀主要是關於**它自己
@@ -75,7 +75,7 @@ class LedgerEntry(Base):
     resolve_attempts: Mapped[int] = mapped_column(default=0)
     resolve_after: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     status: Mapped[LedgerStatus] = mapped_column(enum_column(LedgerStatus), default=LedgerStatus.OK)
-    #: medium 自動入庫的旗標，抄自那一列 Plan Item（CONTEXT.md 的 Audit）。
+    #: medium 自動入庫的旗標，抄自那一列 Plan Item（GLOSSARY.md 的 Audit）。
     audit: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     #: Reconciler 上一次比對它的時間（M2）。

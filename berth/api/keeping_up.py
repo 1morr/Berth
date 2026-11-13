@@ -49,7 +49,7 @@ class TrackedWorkOut(BaseModel):
 
     #: `tv:<tmdb>`，也是 `/media/:id` 的路徑段。
     media_id: str
-    #: Display Round：兩輪都送，畫面照 UI 語言挑（`CONTEXT.md`）。
+    #: Display Round：兩輪都送，畫面照 UI 語言挑（`GLOSSARY.md`）。
     title: str
     title_en: str
     #: 作品上每一條 RSS Series 的字幕組，不重複。

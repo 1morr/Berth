@@ -75,7 +75,7 @@ AI 活動頁列出做了什麼、理由、花費，逐筆撤銷（反向命令�
 ## 共同規則
 
 - **給模型的文字一律英文**：prompt、資料包的欄位說明、schema 的描述。給人看的文案走 i18n key，zh-Hant 與 en 並列。
-- **同輪要改的文件**：brief §6.10、§14、§20（實測到的外部事實，附來源）；plan §2（新表）、§3.2（新迴圈）、§4.5、§6（新端點）、§7（新頁面）；`CONTEXT.md`（新名詞或改名）；`scripts/experiments/README.md`（實驗與評估腳本有增改時）；CHANGELOG。
+- **同輪要改的文件**：brief §6.10、§14、§20（實測到的外部事實，附來源）；plan §2（新表）、§3.2（新迴圈）、§4.5、§6（新端點）、§7（新頁面）；`GLOSSARY.md`（新名詞或改名）；`scripts/experiments/README.md`（實驗與評估腳本有增改時）；CHANGELOG。
 - `services` 新增或改動的公開命令都標 `@command`；非 `internal` 的進命令登錄表。AI 的套用一律經執行器，不另開捷徑；`actor` 用 AI 的身分，事件與 AI 活動頁認得出是誰做的。`test_command_marks.py`、`test_command_registry.py` 的斷言跟著改，不加豁免。
 - **每種任務型別在它自己那張票裡**：設計資料包與 schema、接驗證、凍案例集、跑 AI 評估並把數字寫進票的 Comments、達標才把開關放上設定頁。沒達標的回報使用者，不開放。
 - AI 評估與真模型的量測：結果放在 `.local/experiments/results/`，摘要（數字表與結論）寫進票的 Comments，並在 `docs/research/` 留一份累積的評估紀錄；要用 `.env` 的 key，缺 key 時問使用者。

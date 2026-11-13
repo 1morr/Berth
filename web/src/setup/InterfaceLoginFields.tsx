@@ -212,7 +212,7 @@ export function CarriedApplying({ owner }: { owner: string }) {
 }
 
 /**
- * 剖面的「介面登入」那一列：頁 2、頁 4 同一列、同一組值（M4 票 104）。既有的那一台 Berth 不碰（CONTEXT.md
+ * 剖面的「介面登入」那一列：頁 2、頁 4 同一列、同一組值（M4 票 104）。既有的那一台 Berth 不碰（GLOSSARY.md
  * **Interface login**），只說在哪裡管；「不改你原本的設定」由卡片說一次，這裡不再說。
  */
 export function LoginRow({ origin, username }: { origin: ServiceOrigin; username: string }) {

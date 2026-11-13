@@ -4,7 +4,7 @@
 
 **Blocked by:** 06
 
-**讀:** spec〈第一批任務型別〉、〈AI 評估〉、〈共同規則〉；brief §6.10（程式檢查抓到的那一段）、§15〈季號、offset 與第一批確認〉；`CONTEXT.md`〈Audit〉〈First Batch〉、`jellyfin_item_mismatch`；C1 表「Audit」「第一批確認」兩列；`services/review.py`、`services/first_batch.py`、`services/rematch.py`；第 05、06 張的 Comments
+**讀:** spec〈第一批任務型別〉、〈AI 評估〉、〈共同規則〉；brief §6.10（程式檢查抓到的那一段）、§15〈季號、offset 與第一批確認〉；`GLOSSARY.md`〈Audit〉〈First Batch〉、`jellyfin_item_mismatch`；C1 表「Audit」「第一批確認」兩列；`services/review.py`、`services/first_batch.py`、`services/rematch.py`；第 05、06 張的 Comments
 
 ## 為什麼
 
@@ -19,7 +19,7 @@
 2. 套用都走現有的人工命令，經執行器；驗證同第 05 張，加播出日比對。
 3. 案例集：從真實資料取樣，三種都有，只動可撤銷的東西，至少 20 件，連同標準答案凍進 repo。
 4. 跑評估（兩種接口），達標才在設定頁放開關（三種一個開關或分開，在票內定並寫進 Comments）。
-5. 文件：brief §6.10、§15、`CONTEXT.md`。
+5. 文件：brief §6.10、§15、`GLOSSARY.md`。
 
 ## 驗收
 

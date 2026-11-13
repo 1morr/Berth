@@ -1,4 +1,4 @@
-"""待送表：送給某一個人的一則通知（plan §11.5〈通知〉、M4 票 123、CONTEXT.md 的 Notification）。
+"""待送表：送給某一個人的一則通知（plan §11.5〈通知〉、M4 票 123、GLOSSARY.md 的 Notification）。
 
 **與觸發它的狀態變更寫在同一筆交易**，由送出迴圈（`pipeline/notifying.py`）另外送：管道壞了
 不阻塞任何管線，交易 rollback 時也不會留下一則說「可以看了」的通知。不放寬 `events`：

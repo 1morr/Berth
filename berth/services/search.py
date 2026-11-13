@@ -210,10 +210,10 @@ class SearchView:
     #: `GET /search` 不送它，所以畫面用不到那一項）。
     returned: int = 0
     #: 不同查詢（或不同站）回了同一個發佈，合併掉的筆數（`_dedupe`）。不叫 duplicates：
-    #: CONTEXT.md 的 **Duplicate** 是帳本裡的重複版本。
+    #: GLOSSARY.md 的 **Duplicate** 是帳本裡的重複版本。
     merged: int = 0
     #: `contains` 篩掉的筆數（M5.6 票 05）。沒有 `contains` 時是 0。加起來仍然對得上：
-    #: `returned = merged + filtered_out + Σ counts.total`。不叫 narrowed：CONTEXT.md 的
+    #: `returned = merged + filtered_out + Σ counts.total`。不叫 narrowed：GLOSSARY.md 的
     #: **Narrowing** 是 Media Library 牆上依類型、年份縮小。
     filtered_out: int = 0
     problem: IndexerProblem | None = None

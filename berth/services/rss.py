@@ -617,7 +617,7 @@ async def _grown_by(session: AsyncSession, series_id: int | None = None) -> dict
     """RSS Series → 長出它的 Feed：它最早那一筆 Feed Item 的 Feed（M4 票 105）。給 `series_id`
     只問那一個。
 
-    RSS Series 不屬於任何一個 Feed（`CONTEXT.md`），這是從 Item 推的，不是一個欄位。那一筆跟著
+    RSS Series 不屬於任何一個 Feed（`GLOSSARY.md`），這是從 Item 推的，不是一個欄位。那一筆跟著
     Feed 刪掉之後，剩下的最早那一筆就是。
     """
     first = select(RssItem.series_id, func.min(RssItem.id).label("first")).group_by(

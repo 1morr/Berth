@@ -57,7 +57,7 @@ class PlanItemView:
     target_path: str
     confidence: Confidence
     reasons: tuple[ItemReason, ...]
-    #: medium 自動入庫掛的旗標（CONTEXT.md 的 Audit）。
+    #: medium 自動入庫掛的旗標（GLOSSARY.md 的 Audit）。
     audit: bool
     #: 已經鏈接進媒體庫了。這一列在這裡改不動——那是 rematch 的事（票 08）。
     applied: bool

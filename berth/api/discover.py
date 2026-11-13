@@ -39,7 +39,7 @@ class DiscoverItemOut(BaseModel):
     poster_url: str
     #: `en` 介面的海報。
     poster_url_en: str
-    #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media，票 09 起是 `EXISTS(jobs)`）。
+    #: Berth 已經為這部作品做過事（`GLOSSARY.md` 的 Tracked Media，票 09 起是 `EXISTS(jobs)`）。
     #: **不進 `tmdb_cache`**：它是本地事實而且會當場改掉，那份快取一小時才換一次。
     tracked: bool
 

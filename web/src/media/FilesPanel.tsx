@@ -251,7 +251,7 @@ function FileGroup({
   )
 }
 
-/** S00 的正片是 Specials（TMDB season 0），不是「正片」也不是 extras（CONTEXT.md）。 */
+/** S00 的正片是 Specials（TMDB season 0），不是「正片」也不是 extras（GLOSSARY.md）。 */
 function actionLabel(t: TFunction, file: LedgerFile): string {
   return file.action === 'import' && file.season === 0
     ? t('media.files.special')

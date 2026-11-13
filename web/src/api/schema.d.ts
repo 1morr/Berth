@@ -3151,7 +3151,7 @@ export interface components {
         };
         /**
          * AuditRowOut
-         * @description 一個 medium 自動入庫、等人看一眼的檔案（CONTEXT.md 的 Audit）。`ref` 是帳本那一列的 id。
+         * @description 一個 medium 自動入庫、等人看一眼的檔案（GLOSSARY.md 的 Audit）。`ref` 是帳本那一列的 id。
          */
         AuditRowOut: {
             /**
@@ -3863,7 +3863,7 @@ export interface components {
         };
         /**
          * FeedItemStatus
-         * @description 一筆 Feed Item 走到哪了（`CONTEXT.md`、plan §2.4）。
+         * @description 一筆 Feed Item 走到哪了（`GLOSSARY.md`、plan §2.4）。
          *
          *     `new`（還沒比對）沒有建：一筆 Item 寫下的那一刻就已經認出 RSS Series、看過排除條件，
          *     沒有「還沒比對」這一段（M3 票 10）。
@@ -4845,7 +4845,7 @@ export interface components {
         JobState: "requested" | "submitted" | "submit_failed" | "metadata_ready" | "downloading" | "stalled" | "missing_files" | "client_error" | "client_removed" | "completed" | "planning" | "review" | "importing" | "imported" | "import_failed" | "removed";
         /**
          * JobTrigger
-         * @description 這個 Job 是誰要的（`CONTEXT.md`、plan §2.3）。
+         * @description 這個 Job 是誰要的（`GLOSSARY.md`、plan §2.3）。
          *
          *     規則 id 與重新入庫的來源目錄放在 `jobs.trigger_ref`，不編進這個字串——畫面要拿它
          *     分組，而 `rss:12` 那種寫法會讓每一條規則各自成為一種 trigger。
@@ -4919,7 +4919,7 @@ export interface components {
         };
         /**
          * LedgerFileOut
-         * @description 檔案清單的一列：一筆帳本（CONTEXT.md 的 Ledger Entry）。
+         * @description 檔案清單的一列：一筆帳本（GLOSSARY.md 的 Ledger Entry）。
          */
         LedgerFileOut: {
             /** Id */

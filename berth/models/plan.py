@@ -1,4 +1,4 @@
-"""Import Plan 與它逐檔的決定（plan §2.3、CONTEXT.md、票 11）。
+"""Import Plan 與它逐檔的決定（plan §2.3、GLOSSARY.md、票 11）。
 
 **一個 Job 只有一列 `plans`**（`job_hash` unique），推翻不了的理由是這一列回答的問題：
 「這個 Job 現在的計劃是什麼」。重跑 planning 會把它整份改寫，而不是再長一列——不然
@@ -25,7 +25,7 @@ from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
 
 
 class Plan(Base):
-    """一個 Import Source 的逐檔決定（CONTEXT.md 的 Import Plan）。"""
+    """一個 Import Source 的逐檔決定（GLOSSARY.md 的 Import Plan）。"""
 
     __tablename__ = "plans"
     __table_args__ = (Index("ix_plans_job_hash", "job_hash", unique=True),)
@@ -57,7 +57,7 @@ class Plan(Base):
 
 
 class PlanItem(Base):
-    """Plan 裡一個檔案的決定（CONTEXT.md 的 Plan Item）。
+    """Plan 裡一個檔案的決定（GLOSSARY.md 的 Plan Item）。
 
     欄位與 `domain.PlanItem` 幾乎一樣，但**不是同一個東西**：那一個是解析器的輸出
     （純資料、沒有身分），這一列是它落地之後的樣子——有 id、有 `media_id`（M2 可以逐列
@@ -91,7 +91,7 @@ class PlanItem(Base):
     #: 為什麼是這個決定：`domain.ItemReason` 的 JSON（`{code, params}`），UI 逐條翻譯（brief §6.5、
     #: M2 票 07）。讀寫都走 `services/plan_view.py` 的 `reasons_of` / `dump_reasons`。
     reasons_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JsonText, default=None)
-    #: medium 信心自動入庫時掛的旗標（CONTEXT.md 的 Audit、brief §6.5）。
+    #: medium 信心自動入庫時掛的旗標（GLOSSARY.md 的 Audit、brief §6.5）。
     #: M2 的 Review Queue 以「已入庫待確認」列出它們，一鍵撤銷或確認。
     audit: Mapped[bool] = mapped_column(default=False)
     #: 這一列與帳本上既有的哪一列重複（brief §7.8，M2 票 08）。規劃時比帳本寫下的：同一集

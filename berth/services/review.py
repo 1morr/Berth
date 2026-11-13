@@ -17,7 +17,7 @@ Route 指向那個 Jellyfin 媒體庫的（`library_queue`）。同一支查詢�
 等得最久的那一件最該先看。**不分頁**：超過 `QUEUE_LIMIT` 列時回前面那幾列並帶 `total`，
 那時候該修的是上游（一次掛載掉了、一條 Route 的 medium 規則太鬆），不是加一個分頁器。
 
-audit 的兩顆按鈕也在這裡（CONTEXT.md 的 Audit）：
+audit 的兩顆按鈕也在這裡（GLOSSARY.md 的 Audit）：
 
 - **確認**只改旗標——`ledger.audit` 與那一列 Plan Item 的一起清，檔案不動。**「全部確認」**
   （同一個 Job 一組一顆、audit 段整段一顆，M3 票 05）是同一件事逐列做一次：送來的是畫面上
@@ -108,7 +108,7 @@ class AuditUndone:
 
     #: 真的拆掉了。撤銷之前有人已經在 Jellyfin 裡刪掉它的話沒有東西可拆。
     unlinked: bool
-    #: 那條路徑上的已經不是 Berth 放的那一個，沒有碰（M3 票 01、CONTEXT.md 的 Unmanaged）。
+    #: 那條路徑上的已經不是 Berth 放的那一個，沒有碰（M3 票 01、GLOSSARY.md 的 Unmanaged）。
     unmanaged: bool
 
 
@@ -395,7 +395,7 @@ async def confirm_audits(
 
 @command(Effect.REVERSIBLE)
 async def undo_audit(session: AsyncSession, ledger_id: int, *, actor: str) -> AuditUndone:
-    """「它是錯的」：拆鏈接 → 刪帳本那一列 → Job 回 `review`（CONTEXT.md 的 Audit）。
+    """「它是錯的」：拆鏈接 → 刪帳本那一列 → Job 回 `review`（GLOSSARY.md 的 Audit）。
 
     那條路徑上的已經不是 Berth 放的那一個時（使用者換成了自己的一份）不拆它，其餘照做：撤銷說的
     是「這一個入庫是錯的」，帳本那一列與 Job 照樣處理，而那個檔案下一輪對帳是
@@ -501,7 +501,7 @@ async def _back_to_review(session: AsyncSession, job: Job) -> None:
 
 
 async def _clear_item(session: AsyncSession, entry: LedgerEntry, *, unapply: bool) -> None:
-    """那一列 Plan Item 的 `audit` 跟著清（兩處旗標是同一件事，CONTEXT.md）。
+    """那一列 Plan Item 的 `audit` 跟著清（兩處旗標是同一件事，GLOSSARY.md）。
 
     撤銷時連 `applied_at` 一起清：那個檔案已經不在媒體庫裡了，Plan 上不該再說它套用過——
     下載列表那一列的「N 個待確認」數的也是這一格。

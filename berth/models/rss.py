@@ -1,4 +1,4 @@
-"""RSS：Feed、RSS Series、Feed Item（plan §2.4、brief §15、`CONTEXT.md` 的 RSS 一節）。
+"""RSS：Feed、RSS Series、Feed Item（plan §2.4、brief §15、`GLOSSARY.md` 的 RSS 一節）。
 
 三張表的關係是 **Feed 長出 Item、Item 長出（或找到）Series**，而 Series 不屬於任何一個 Feed：
 它是「一部作品 × 一個來源」（Mikan 的番組 × 字幕組），同一個組合出現在兩個 Feed 裡是同一個
@@ -40,7 +40,7 @@ FEED_INTERVALS: tuple[int, ...] = (
 
 
 class RssFeed(Base):
-    """一個 RSS 來源（`CONTEXT.md` 的 Feed）。"""
+    """一個 RSS 來源（`GLOSSARY.md` 的 Feed）。"""
 
     __tablename__ = "rss_feeds"
 
@@ -92,7 +92,7 @@ class RssFeed(Base):
 
 
 class RssSeries(Base):
-    """一部作品 × 一個來源（`CONTEXT.md` 的 RSS Series）。`media_id` 是 `NULL` 就是待綁定。"""
+    """一部作品 × 一個來源（`GLOSSARY.md` 的 RSS Series）。`media_id` 是 `NULL` 就是待綁定。"""
 
     __tablename__ = "rss_series"
 
@@ -140,7 +140,7 @@ class RssSeries(Base):
 
 
 class RssItem(Base):
-    """Feed 裡的一筆（`CONTEXT.md` 的 Feed Item）。"""
+    """Feed 裡的一筆（`GLOSSARY.md` 的 Feed Item）。"""
 
     __tablename__ = "rss_items"
     __table_args__ = (

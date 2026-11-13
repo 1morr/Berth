@@ -65,7 +65,7 @@ from berth.services.steps import message
 
 logger = logging.getLogger(__name__)
 
-#: 目標路徑上已經有一個不是 Berth 鏈接的檔案（CONTEXT.md 的 Unmanaged、plan §3.3）。
+#: 目標路徑上已經有一個不是 Berth 鏈接的檔案（GLOSSARY.md 的 Unmanaged、plan §3.3）。
 #: 存在那一列 `plan_items.error` 上。
 UNMANAGED_TARGET = "target_unmanaged"
 

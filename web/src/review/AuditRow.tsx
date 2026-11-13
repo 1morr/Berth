@@ -24,7 +24,7 @@ import { leadReason, leadText } from './leadReason'
 import type { Said } from './useConfirmAudits'
 
 /**
- * 一個 medium 自動入庫、等人看一眼的檔案（CONTEXT.md 的 Audit、`.scratch/m2/review-shape.md`）。
+ * 一個 medium 自動入庫、等人看一眼的檔案（GLOSSARY.md 的 Audit、`.scratch/m2/review-shape.md`）。
  *
  * **它已經在媒體庫裡了**，這一列問的是「對不對」。兩顆按鈕：
  *

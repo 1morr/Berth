@@ -743,7 +743,7 @@ async def reimport(
 
     `media` 是管理員選的那一部作品（`tv:<tmdb>`）。`plans` 是規劃器的喚醒訊號，同 `replan`。
 
-    **唯一不以按鈕值為名的一顆**：按鈕值是 `adopt`，函式照名詞表叫 reimport（`CONTEXT.md`
+    **唯一不以按鈕值為名的一顆**：按鈕值是 `adopt`，函式照名詞表叫 reimport（`GLOSSARY.md`
     〈Claim〉）。
     """
     row = await _pressable(session, issue_id, IssueAction.ADOPT, media=media)

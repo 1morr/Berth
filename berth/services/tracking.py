@@ -1,6 +1,6 @@
-"""「Berth 為這部作品做過事嗎」——Tracked Media 的推導（`CONTEXT.md`、票 04b、09）。
+"""「Berth 為這部作品做過事嗎」——Tracked Media 的推導（`GLOSSARY.md`、票 04b、09）。
 
-`CONTEXT.md` 說 Tracked Media 是「Berth 曾為其下載、訂閱或入庫過的 Media」。那是一個
+`GLOSSARY.md` 說 Tracked Media 是「Berth 曾為其下載、訂閱或入庫過的 Media」。那是一個
 **推導出來的結果**，不是一顆按鈕、也不是 `media` 上的一個欄位（票 04b 把那個欄位刪掉了）：
 點進詳情頁就會寫下一列 `media`（快照要有地方放），所以「有這一列」什麼都不代表。
 

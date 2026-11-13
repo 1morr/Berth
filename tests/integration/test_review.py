@@ -204,7 +204,7 @@ class TestConfirm:
         assert await audit_rows(session) == []
         await session.refresh(entry)
         assert entry.audit is False
-        # 兩處旗標是同一件事（CONTEXT.md 的 Audit）：下載列表那一列的「N 個待確認」數的是這一格。
+        # 兩處旗標是同一件事（GLOSSARY.md 的 Audit）：下載列表那一列的「N 個待確認」數的是這一格。
         (item,) = [row for row in await items_of(session) if row.id == entry.plan_item_id]
         assert item.audit is False
 

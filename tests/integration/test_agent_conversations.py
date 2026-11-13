@@ -161,7 +161,7 @@ class TestTheList:
 
 
 class TestHistoryCommand:
-    """`/history`（不叫 `/resume`：`CONTEXT.md` 把 resume 留給 Jellyfin 的繼續觀看）。"""
+    """`/history`（不叫 `/resume`：`GLOSSARY.md` 把 resume 留給 Jellyfin 的繼續觀看）。"""
 
     def test_it_answers_with_the_same_list(self, client: TestClient) -> None:
         seed(client, "c1", said="older", at=T0 - timedelta(minutes=1))

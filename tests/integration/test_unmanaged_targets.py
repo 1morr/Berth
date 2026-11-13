@@ -2,7 +2,7 @@
 
 三條路是刪除範圍的「移除鏈接」、audit 撤銷、rematch 拆舊鏈接。使用者把 Berth 的硬鏈接換成
 自己的檔案之後（一份複製品、一個重新壓制的版本），那條路徑上的已經是 **Unmanaged**
-（CONTEXT.md）——Berth 只刪得掉自己放下去的那一個。三條路之前都照路徑刪，會把它刪掉。
+（GLOSSARY.md）——Berth 只刪得掉自己放下去的那一個。三條路之前都照路徑刪，會把它刪掉。
 
 判斷只有一份（`deletion.Placed.holds`）：帳本記的 inode，或來源現在的 inode，兩者都對不上就
 不是 Berth 放的。`TestOneJudgement` 把它換成「一律是」，三條路一起變回照路徑刪——證明三條都

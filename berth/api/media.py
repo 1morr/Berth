@@ -117,7 +117,7 @@ class RouteChoiceOut(BaseModel):
 
 
 class LedgerFileOut(BaseModel):
-    """檔案清單的一列：一筆帳本（CONTEXT.md 的 Ledger Entry）。"""
+    """檔案清單的一列：一筆帳本（GLOSSARY.md 的 Ledger Entry）。"""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -224,7 +224,7 @@ class MediaOut(BaseModel):
     folder_name: str
     #: 那串字已經定死了：第一次送單成功那一刻起磁碟上真的有一個那樣的資料夾（brief §4.5）。
     folder_frozen: bool
-    #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media）。**推導出來的**，
+    #: Berth 已經為這部作品做過事（`GLOSSARY.md` 的 Tracked Media）。**推導出來的**，
     #: 不是欄位——票 09 起是 `EXISTS(jobs)`，票 12 加帳本，M3 加 Rule（票 04b）。
     tracked: bool
     #: 上次送單用的 Route。下拉的預選值——「入庫到哪裡」是一個會重複的決定（plan §2.2）。

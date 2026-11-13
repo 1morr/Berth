@@ -523,7 +523,7 @@ def _date_doubt(media: MediaSnapshot, info: ReleaseInfo, found: _Mapped) -> tupl
 
 @dataclass(frozen=True, slots=True)
 class _Run:
-    """一輪播出：某一季按播出間隔切出的一段（CONTEXT.md 的 Cour；那一季是 TMDB 併起來的時候
+    """一輪播出：某一季按播出間隔切出的一段（GLOSSARY.md 的 Cour；那一季是 TMDB 併起來的時候
     就是 Virtual season）。`number` 是它在全部正片的季裡依序的編號，從 1 起。"""
 
     number: int

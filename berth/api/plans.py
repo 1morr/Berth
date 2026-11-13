@@ -136,7 +136,7 @@ class PlanItemOut(BaseModel):
     confidence: Confidence
     #: 為什麼是這個決定，逐條（brief §6.3 最後一條）。
     reasons: list[ItemReasonOut]
-    #: medium 自動入庫掛的旗標（CONTEXT.md 的 Audit）。M2 的佇列以它列出「已入庫待確認」。
+    #: medium 自動入庫掛的旗標（GLOSSARY.md 的 Audit）。M2 的佇列以它列出「已入庫待確認」。
     audit: bool
     #: 已經鏈接進媒體庫了；改它是重新匹配的事（票 08），這裡改不動。
     applied: bool

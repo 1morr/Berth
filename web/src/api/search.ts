@@ -6,7 +6,7 @@ import type { Schemas } from './schemas'
 /** 一次搜尋的整份回應（`berth/api/search.py` 的 `SearchOut`）。 */
 export type SearchResults = Schemas['SearchOut']
 
-/** 結果表的一列（`CONTEXT.md` 的 Search Result）。 */
+/** 結果表的一列（`GLOSSARY.md` 的 Search Result）。 */
 export type SearchResult = Schemas['SearchResultOut']
 
 /** 索引站那邊沒搜到東西的幾種樣子。與 `TmdbProblem` 一樣，每一種的下一步都不同。 */

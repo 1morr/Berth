@@ -1212,7 +1212,7 @@ def bundled_path(folder: str, library_root: str) -> str:
 
 
 def berth_path(library_name: str, library_root: str, locations: Sequence[str] = ()) -> str:
-    """「加入 Berth 路徑」加的那一條：`<library root>/<slug>`（CONTEXT.md）。
+    """「加入 Berth 路徑」加的那一條：`<library root>/<slug>`（GLOSSARY.md）。
 
     第 5 步的 Route 也用這一支決定「這個媒體庫的 Berth 路徑是哪一條」，兩邊算出來的字串
     必須一模一樣，否則畫面會對 Berth 自己建的路徑說「還沒有 Berth 路徑」。

@@ -4,7 +4,7 @@
 管理動作，一般使用者也看得了（brief §11）。**看得到哪幾個媒體庫**由權限閘門決定
 （`services/jellyfin_access.py`）：Jellyfin 的使用者 id 只從 session 來，這裡沒有任何一個參數收它。
 
-路徑叫 `inventory` 不叫 `library`：`CONTEXT.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端的
+路徑叫 `inventory` 不叫 `library`：`GLOSSARY.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端的
 媒體庫（前端的頁面網址仍是 plan §7 的 `/library/:libraryId`）。
 """
 

@@ -151,7 +151,7 @@ class AuditSeriesOut(BaseModel):
 
 
 class AuditRowOut(BaseModel):
-    """一個 medium 自動入庫、等人看一眼的檔案（CONTEXT.md 的 Audit）。`ref` 是帳本那一列的 id。"""
+    """一個 medium 自動入庫、等人看一眼的檔案（GLOSSARY.md 的 Audit）。`ref` 是帳本那一列的 id。"""
 
     kind: Literal[ReviewKind.AUDIT]
     ref: int

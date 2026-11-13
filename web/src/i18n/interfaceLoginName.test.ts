@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { resources, SUPPORTED_LANGUAGES } from './resources'
 
 /**
- * 介面登入只有一個叫法（M4 票 103，CONTEXT.md 的 **Interface login**）：票 68 的 critique 看到套件內
+ * 介面登入只有一個叫法（M4 票 103，GLOSSARY.md 的 **Interface login**）：票 68 的 critique 看到套件內
  * qBittorrent 的登入叫「WebUI 登入」、Prowlarr 的叫「介面登入」，頁 2 的標題與按鈕兩個叫法並存。
  * qBittorrent 自己的選單路徑「選項 → WebUI」是它的標籤，照留。
  */

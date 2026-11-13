@@ -4,7 +4,7 @@
 
 **Blocked by:** 05
 
-**讀:** spec〈範圍〉〈AI 活動頁與理由〉、〈共同規則〉；brief §14〈可追溯、可撤銷〉；plan §6、§7〈路由〉〈元件〉；`CONTEXT.md`〈AI Activity〉〈Weekly Report〉；`services/commands.py`（inverse 的三種寫法）；`PRODUCT.md`、`DESIGN.md`
+**讀:** spec〈範圍〉〈AI 活動頁與理由〉、〈共同規則〉；brief §14〈可追溯、可撤銷〉；plan §6、§7〈路由〉〈元件〉；`GLOSSARY.md`〈AI Activity〉〈Weekly Report〉；`services/commands.py`（inverse 的三種寫法）；`PRODUCT.md`、`DESIGN.md`
 
 ## 為什麼
 
@@ -17,7 +17,7 @@
 3. **審核頁**：AI 交回人的每一件附 AI 的理由（`ReasonCode` 的文案加自由文字）。
 4. **週報**：多列 AI 這週做了幾件、交回人幾件（存下來的週報，舊的不變）。
 5. 導覽入口放哪照 `DESIGN.md`〈Navigation〉定，寫進 Comments。
-6. 文件：plan §6（新端點）、§7（新路由）、`CONTEXT.md`。
+6. 文件：plan §6（新端點）、§7（新路由）、`GLOSSARY.md`。
 
 ## 驗收
 

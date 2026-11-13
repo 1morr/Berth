@@ -92,7 +92,7 @@ class ScheduleSlot:
 
     media_id: str
     tmdb_id: int
-    #: Display Round：`zh-TW` 那一輪的標題與海報；`_en` 是 `en-US` 那一輪（`CONTEXT.md`）。
+    #: Display Round：`zh-TW` 那一輪的標題與海報；`_en` 是 `en-US` 那一輪（`GLOSSARY.md`）。
     title: str
     title_en: str
     #: TMDB 的 `original_name`：第二層照它對 AniList 與 Bangumi。
@@ -358,7 +358,7 @@ async def _cards(
 ) -> tuple[ScheduleCard, ...]:
     """骨架加上這一刻的狀態，一次問一整週（不是逐張一句查詢）。
 
-    已訂閱是 `CONTEXT.md` 的訂閱（`rss.subscribed_media`，與作品頁的訂閱清單同一個來源）；晚了是
+    已訂閱是 `GLOSSARY.md` 的訂閱（`rss.subscribed_media`，與作品頁的訂閱清單同一個來源）；晚了是
     追更頁的同一套判定（`keeping_up.late_by_work`，只問訂閱著的那幾部）。
     """
     wanted = list({slot.media_id for slot in slots})

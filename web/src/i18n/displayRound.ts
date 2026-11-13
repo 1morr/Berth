@@ -1,7 +1,7 @@
 import { SUPPORTED_LANGUAGES, type Language } from './resources'
 
 /**
- * 挑 **Display Round**（CONTEXT.md）：TMDB 的顯示用標題、簡介與海報跟著 UI 語言走（brief §7.5）——
+ * 挑 **Display Round**（GLOSSARY.md）：TMDB 的顯示用標題、簡介與海報跟著 UI 語言走（brief §7.5）——
  * `zh-Hant` 取 `zh-TW` 那一輪，`en` 取 `en-US` 那一輪。原名 `tmdbText`，M1.5 票 11 起它也挑海報，
  * 名字只說了一半（M2 票 13 改名）。
  *

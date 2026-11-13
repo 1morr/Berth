@@ -253,7 +253,7 @@ _BACKOFF_CAP = timedelta(hours=1)
 #: 限速卻沒說要等多久時等的秒數（Discord 一定給，這是防回的不是 Discord）。
 _RATE_LIMIT_FALLBACK = 1.0
 
-#: 「Route」在兩種介面裡都是這個詞（CONTEXT.md）。
+#: 「Route」在兩種介面裡都是這個詞（GLOSSARY.md）。
 _ROUTE = "Route"
 
 

@@ -68,7 +68,7 @@ class TrackedWork:
     """追更頁的一列。"""
 
     media_id: str
-    #: Display Round（`CONTEXT.md`）。
+    #: Display Round（`GLOSSARY.md`）。
     title: str
     title_en: str
     #: 作品上每一條訂閱的字幕組，不重複：先 Series、再還沒長出 Series 的 Feed，各照建立的順序
@@ -241,7 +241,7 @@ def _air_dates(snapshot: MediaSnapshot) -> dict[tuple[int, int], date | None]:
 
 @dataclass(frozen=True, slots=True)
 class Subscriptions:
-    """遲到看的一部作品的訂閱（`CONTEXT.md`〈訂閱〉）。"""
+    """遲到看的一部作品的訂閱（`GLOSSARY.md`〈訂閱〉）。"""
 
     #: 綁到它、還帶著 Item 的 RSS Series，照建立的順序。
     series: tuple[RssSeries, ...]

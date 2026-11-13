@@ -211,7 +211,7 @@ def with_second_disk(roots: dict[str, Path]) -> tuple[tuple[SetupLibrary, ...], 
 
 
 def berth_path(roots: dict[str, Path], name: str) -> str:
-    """「加入 Berth 路徑」會加的那一條：`<library root>/<slug>`（CONTEXT.md）。
+    """「加入 Berth 路徑」會加的那一條：`<library root>/<slug>`（GLOSSARY.md）。
 
     容器路徑一律以 `/` 相接，所以這裡也照著組——`Path` 在 Windows 上會換成反斜線，
     而正式部署裡兩邊看到的都是 Linux 路徑。

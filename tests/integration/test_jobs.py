@@ -696,7 +696,7 @@ class TestRefusals:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """還不知道是哪一個 torrent 就沒有 Job——`jobs.hash` 是主鍵，而 Job 記的正是
-        「一個 torrent 的生命週期」（`CONTEXT.md`）。"""
+        「一個 torrent 的生命週期」（`GLOSSARY.md`）。"""
         await arrange(session, roots)
         media = await _media(session)
         route = await _route(session, roots)

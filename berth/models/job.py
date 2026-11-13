@@ -22,7 +22,7 @@ from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
 
 
 class Job(Base):
-    """一個 torrent 在 Berth 中的生命週期紀錄（`CONTEXT.md`）。"""
+    """一個 torrent 在 Berth 中的生命週期紀錄（`GLOSSARY.md`）。"""
 
     __tablename__ = "jobs"
 

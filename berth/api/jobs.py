@@ -302,7 +302,7 @@ class JobDeletedOut(BaseModel):
     #: 真的空出來的位元組。只有來源與所有鏈接都刪掉時才不是 0。
     freed: int
     #: 沒有拆的媒體庫路徑：那裡的檔案已經不是 Berth 放的那一個（使用者換成了自己的一份，
-    #: CONTEXT.md 的 Unmanaged）。帳本那一列留給下一輪對帳（M3 票 01）。
+    #: GLOSSARY.md 的 Unmanaged）。帳本那一列留給下一輪對帳（M3 票 01）。
     unmanaged: list[str]
 
 

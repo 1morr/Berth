@@ -67,7 +67,7 @@ class DiscoverItem:
     #: TMDB 的類型有 Animation；不知道是 `None`。給側面板挑動畫用，畫面的 API 不帶它
     #: （`api/discover.DiscoverItemOut` 照它自己的欄位讀）。
     animation: bool | None = None
-    #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media）。**不進 `tmdb_cache`**：
+    #: Berth 已經為這部作品做過事（`GLOSSARY.md` 的 Tracked Media）。**不進 `tmdb_cache`**：
     #: 它是本地事實而且會當場改掉，而那份快取一小時才換一次（plan §8.3）。
     tracked: bool = False
 

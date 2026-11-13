@@ -24,7 +24,7 @@ torrent 可能早就不在客戶端了（`client_removed`），而 Berth 仍然�
 還握著它。
 
 **媒體庫那一側只拆 Berth 放下去的那一個**（M3 票 01）：使用者可能把硬鏈接換成了自己的檔案
-（一份複製品、一個重新壓制的版本），那時候那條路徑上的是 Unmanaged（CONTEXT.md），永不刪。
+（一份複製品、一個重新壓制的版本），那時候那條路徑上的是 Unmanaged（GLOSSARY.md），永不刪。
 會拆媒體庫鏈接的每一條路——這裡的「移除鏈接」、audit 撤銷、rematch 拆舊鏈接——都走
 `remove_one`，判斷只有 `Placed.holds` 一份。
 """
@@ -368,7 +368,7 @@ class Unlink(StrEnum):
     REMOVED = "removed"
     #: 本來就不在（有人在 Jellyfin 或檔案總管裡先刪了）。要做的事已經成立。
     GONE = "gone"
-    #: 那條路徑上的已經不是 Berth 放的那一個，沒有碰（CONTEXT.md 的 Unmanaged）。
+    #: 那條路徑上的已經不是 Berth 放的那一個，沒有碰（GLOSSARY.md 的 Unmanaged）。
     UNMANAGED = "unmanaged"
 
 

@@ -1019,7 +1019,7 @@ async def _store(
 def _audit(
     item: PlannedFile, status: PlanStatus, series: RssSeries | None, *, vouched: bool = False
 ) -> bool:
-    """medium **而且真的自動入庫了**才掛 audit（brief §6.5、CONTEXT.md）。
+    """medium **而且真的自動入庫了**才掛 audit（brief §6.5、GLOSSARY.md）。
 
     停在 review 的那一份誰都還沒動過，那時候掛旗標會讓 Review Queue 把「已入庫待確認」
     與「還沒入庫」混成同一列。

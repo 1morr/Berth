@@ -362,7 +362,7 @@ class TestStatus:
     async def test_a_keyword_feed_bound_to_the_work_is_a_subscription(
         self, session: AsyncSession
     ) -> None:
-        """訂閱是 `CONTEXT.md` 那一個：預先綁定作品的關鍵字 Feed 還沒長出 RSS Series 也算
+        """訂閱是 `GLOSSARY.md` 那一個：預先綁定作品的關鍵字 Feed 還沒長出 RSS Series 也算
         （acg.rip 的「只追之後的」就是這樣）。"""
         client = tmdb()
         factory = await credentialled(session, client)
@@ -384,7 +384,7 @@ class TestStatus:
     async def test_deleting_the_feed_unsubscribes_even_though_the_series_stays(
         self, session: AsyncSession
     ) -> None:
-        """刪掉一條訂閱就是刪那條 Feed（`CONTEXT.md`）；RSS Series 與它的綁定留著
+        """刪掉一條訂閱就是刪那條 Feed（`GLOSSARY.md`）；RSS Series 與它的綁定留著
         （`rss.delete_feed`），但卡片要說未訂閱，與作品頁的訂閱清單一致。"""
         client = tmdb()
         factory = await credentialled(session, client)

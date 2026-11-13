@@ -1125,7 +1125,7 @@ async def _resolve(factory: ServiceClientFactory, url: str) -> TorrentSource:
     """索引站的下載連結 → info hash + 要交出去的那一份。
 
     失敗**不建 Job**：`jobs.hash` 是主鍵，而 Job 記的正是「一個 torrent 的生命週期」
-    （`CONTEXT.md`）——連是哪一個 torrent 都還不知道時，沒有東西可以記。
+    （`GLOSSARY.md`）——連是哪一個 torrent 都還不知道時，沒有東西可以記。
     """
     fetcher = factory.torrent()
     try:

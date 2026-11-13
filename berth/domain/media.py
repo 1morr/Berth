@@ -104,7 +104,7 @@ class MediaSnapshot(BaseModel):
     #: 電影一律 `False`。
     #: M4 票 13 之前寫下的快照沒有這一欄，讀出來是 `False`，下一次刷新（至多 24 小時）補上。
     ended: bool = False
-    #: 凍結的作品資料夾名（CONTEXT.md 的 Folder Name、`media.folder_name`，brief §4.5）。
+    #: 凍結的作品資料夾名（GLOSSARY.md 的 Folder Name、`media.folder_name`，brief §4.5）。
     #: **不是 TMDB 的資料**：`models.Media.snapshot()` 讀出來時才放進來，所以不進快照的 JSON。
     #: 空字串 = 還沒凍結，命名照標題算。
     folder_name: str = Field(default="", exclude=True)

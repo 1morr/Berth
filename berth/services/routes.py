@@ -1,7 +1,7 @@
 """精靈第 5 步：媒體庫 → Library Route 與跨服務檢查（plan §9.3 第 5 步、§9.5、brief §4）。
 
 一個 Route 是「一個 Jellyfin 媒體庫 + 一條寫入目標路徑 + 一個 qBittorrent category」
-（CONTEXT.md）。這一步做兩件事：
+（GLOSSARY.md）。這一步做兩件事：
 
 - **建 Route**。套件內由 Berth 自己建的每一個媒體庫自動長出一個 Route；既有 Jellyfin 由使用者
   勾選媒體庫，並從**那個媒體庫自己回報的路徑**裡選一條當寫入目標——路徑一律用選的，不用打的

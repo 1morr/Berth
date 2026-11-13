@@ -1,6 +1,6 @@
 """媒體庫：Jellyfin 的整面牆與 Berth 經手的作品在上面的樣子（M1.5 票 03、票 13）。
 
-**名字叫 inventory 不叫 library**：`CONTEXT.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端的
+**名字叫 inventory 不叫 library**：`GLOSSARY.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端的
 媒體庫，而這一支盤點的是「那個媒體庫裡有什麼、Berth 經手的那幾部走到哪了」（UI 顯示「媒體庫」）。
 
 同一件事有兩種切法，所以兩個入口住在一起、共用同一組分類：
@@ -182,7 +182,7 @@ class SeasonView:
 
 @dataclass(frozen=True, slots=True)
 class LedgerFileView:
-    """檔案清單的一列：一筆帳本（CONTEXT.md 的 Ledger Entry）。"""
+    """檔案清單的一列：一筆帳本（GLOSSARY.md 的 Ledger Entry）。"""
 
     id: int
     action: PlanAction

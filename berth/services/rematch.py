@@ -132,7 +132,7 @@ class Move:
     error: str = ""
     #: 這一步拆掉的舊路徑（通知 Jellyfin 用）。
     removed: str = ""
-    #: 舊路徑上的已經不是 Berth 放的那一個，沒有拆（M3 票 01、CONTEXT.md 的 Unmanaged）。
+    #: 舊路徑上的已經不是 Berth 放的那一個，沒有拆（M3 票 01、GLOSSARY.md 的 Unmanaged）。
     unmanaged: str = ""
 
 

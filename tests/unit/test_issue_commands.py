@@ -28,7 +28,7 @@ from berth.services.issues import BUTTONS, Press
 #: 畫面上按得到的每一顆：`ISSUE_ACTIONS` 裡出現過的。
 OFFERED = {action for actions in ISSUE_ACTIONS.values() for action in actions}
 
-#: 不以按鈕值為名的命令：`CONTEXT.md`〈Claim〉說函式一律叫 reimport，`adopt` 只當按鈕值。
+#: 不以按鈕值為名的命令：`GLOSSARY.md`〈Claim〉說函式一律叫 reimport，`adopt` 只當按鈕值。
 RENAMED = {IssueAction.ADOPT: "reimport"}
 
 

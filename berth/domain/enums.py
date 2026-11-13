@@ -106,7 +106,7 @@ class WhyNotRefusal(StrEnum):
 
 
 class JobTrigger(StrEnum):
-    """這個 Job 是誰要的（`CONTEXT.md`、plan §2.3）。
+    """這個 Job 是誰要的（`GLOSSARY.md`、plan §2.3）。
 
     規則 id 與重新入庫的來源目錄放在 `jobs.trigger_ref`，不編進這個字串——畫面要拿它
     分組，而 `rss:12` 那種寫法會讓每一條規則各自成為一種 trigger。
@@ -1163,7 +1163,7 @@ class ReviewReason(StrEnum):
     #: 目標路徑上已經有一個**別的**檔案（inode 不同，plan §3.3）。Berth 不覆寫媒體庫裡
     #: 不是它鏈接的東西（brief §5.3），所以停下來等人決定。
     TARGET_EXISTS = "target_exists"
-    #: 一個 medium 自動入庫的檔案被管理員從 Review Queue 撤銷了（CONTEXT.md 的 Audit）。
+    #: 一個 medium 自動入庫的檔案被管理員從 Review Queue 撤銷了（GLOSSARY.md 的 Audit）。
     #: 下一步是改那一列的季集或駁回，不是再點一次頭——這份 Plan 已經被說過一次「不對」。
     AUDIT_UNDONE = "audit_undone"
     #: 發佈時間與換算出的那一集的播出日對不上（M3 票 14，`parser.airing`）：季號、offset 或絕對編號
@@ -1185,7 +1185,7 @@ class ReviewKind(StrEnum):
 
     #: 低信心的 Plan，逐檔可改（票 07）。
     PLAN = "plan"
-    #: medium 自動入庫、等人確認的檔案（CONTEXT.md 的 Audit）。
+    #: medium 自動入庫、等人確認的檔案（GLOSSARY.md 的 Audit）。
     AUDIT = "audit"
     #: 對不到的檔案（票 08）。
     UNMATCHED = "unmatched"
@@ -1649,7 +1649,7 @@ class FeedKind(StrEnum):
 
 
 class FeedItemStatus(StrEnum):
-    """一筆 Feed Item 走到哪了（`CONTEXT.md`、plan §2.4）。
+    """一筆 Feed Item 走到哪了（`GLOSSARY.md`、plan §2.4）。
 
     `new`（還沒比對）沒有建：一筆 Item 寫下的那一刻就已經認出 RSS Series、看過排除條件，
     沒有「還沒比對」這一段（M3 票 10）。
@@ -2097,7 +2097,7 @@ class ScheduleStatus(StrEnum):
     #: 卡片上那一集是作品遲到判定裡晚的集（M5.5 票 12，`services.keeping_up.late_by_work`）：
     #: 卡片另帶「晚 N 天」。
     LATE = "late"
-    #: 作品現在有一條訂閱（`CONTEXT.md`：預先綁定它的 Feed，或帶著綁到它的 RSS Series 的 Feed；
+    #: 作品現在有一條訂閱（`GLOSSARY.md`：預先綁定它的 Feed，或帶著綁到它的 RSS Series 的 Feed；
     #: `rss.subscribed_media`）。
     SUBSCRIBED = "subscribed"
     UNSUBSCRIBED = "unsubscribed"

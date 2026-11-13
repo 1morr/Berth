@@ -1136,7 +1136,7 @@ const zhHant = {
     savePath: 'complete 目錄',
     skippedTitle: '跳過的步驟',
     // 選了既有的服務，套件內那一台閒著（審計 P2-20）：頁上的那兩行在選的那一頁，這裡再提醒一次。不叫 unused：
-    // 那是 CONTEXT.md 的 Unused service（選了不用 Prowlarr）。
+    // 那是 GLOSSARY.md 的 Unused service（選了不用 Prowlarr）。
     idle: {
       title: '閒著的套件內容器',
       body: '這幾個接的是你自己的那一台：{{services}}。套件內的用不到了，還沒停的話：把 .env 的 COMPOSE_PROFILES 換成第一行，再用第二行停掉。忘了也不致命，只是多開著沒人用的容器。',
@@ -1340,7 +1340,7 @@ const zhHant = {
     popular: '熱門',
     results: '「{{query}}」的結果',
     noArt: '無海報',
-    // Berth 曾為這部作品下載、訂閱或入庫過（`CONTEXT.md` 的 Tracked Media）。
+    // Berth 曾為這部作品下載、訂閱或入庫過（`GLOSSARY.md` 的 Tracked Media）。
     tracked: '已下載過',
     empty: 'TMDB 這一輪什麼都沒回。過一小時快取到期後會再問一次。',
     readFailed: '讀不到這一份清單。',
@@ -2250,7 +2250,7 @@ const zhHant = {
       // 從審核裡套用到 RSS Series 之後，接在 Series 那一句後面：改的這一份沒有跟著核准。
       stillToApprove: '這一份照你改的留著，核准之後才入庫。',
     },
-    // audit 那一列（CONTEXT.md 的 Audit）。
+    // audit 那一列（GLOSSARY.md 的 Audit）。
     audit: {
       label: '待確認',
       reason: {
@@ -2540,12 +2540,12 @@ const zhHant = {
     progressInline: '進度 {{value}}',
     retry: '重新送單',
     retrying: '送單中…',
-    // 不叫「重新入庫」：那是 CONTEXT.md 的 Reimport（M2，以 complete 下的目錄為來源）。
+    // 不叫「重新入庫」：那是 GLOSSARY.md 的 Reimport（M2，以 complete 下的目錄為來源）。
     retryImport: '再試一次入庫',
     retryingImport: '入庫中…',
     retried: '已重試，現在是{{state}}。',
     retryFailed: '重試沒有成功。',
-    // CONTEXT.md 的 Reimport：以 complete 裡那一包重新入庫，不必 torrent 還在（brief §9.3）。
+    // GLOSSARY.md 的 Reimport：以 complete 裡那一包重新入庫，不必 torrent 還在（brief §9.3）。
     reimport: '重新入庫',
     reimporting: '重新入庫中…',
     reimportFailed: '重新入庫沒有成功。',
@@ -2687,7 +2687,7 @@ const zhHant = {
       auditUndone: '管理員撤銷了這個檔案的入庫，這一筆回到待審核',
       auditUndoneGone:
         '管理員撤銷了這個檔案的入庫（它在那之前已經不在媒體庫裡了），這一筆回到待審核',
-      // 那條路徑上的已經不是 Berth 放的那一個（M3 票 01、CONTEXT.md 的 Unmanaged）：Berth 沒有刪它。
+      // 那條路徑上的已經不是 Berth 放的那一個（M3 票 01、GLOSSARY.md 的 Unmanaged）：Berth 沒有刪它。
       auditUndoneUnmanaged:
         '管理員撤銷了這個檔案的入庫，這一筆回到待審核。媒體庫裡那個檔案已經不是 Berth 放的那一個，所以沒有刪',
       keptUnmanaged_one: '{{count}} 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪：',
@@ -3491,7 +3491,7 @@ const zhHant = {
       failed: '沒有存進去。',
     },
   },
-  // Route 設定頁（票 14）。「Route」保留原文：它是 CONTEXT.md 的名詞，精靈與健康頁也這樣寫。
+  // Route 設定頁（票 14）。「Route」保留原文：它是 GLOSSARY.md 的名詞，精靈與健康頁也這樣寫。
   routeSettings: {
     title: '媒體庫路徑',
     lede: '每條 Route 是一個 Jellyfin 媒體庫加上一條寫入目標；同一個媒體庫可以有好幾條，例如兩顆碟各一條。停用的 Route 不收新的送單；還有下載、入庫檔案或 RSS 綁著它時，它刪不得。',

@@ -180,7 +180,7 @@ export async function retryJob(hash: string) {
 }
 
 /**
- * 以 complete 裡那一包重新入庫（CONTEXT.md 的 Reimport、brief §9.3、M2 票 10）。回的是退回
+ * 以 complete 裡那一包重新入庫（GLOSSARY.md 的 Reimport、brief §9.3、M2 票 10）。回的是退回
  * `completed` 的那一筆；規劃與鏈接是背景迴圈照常的一輪。只有 admin 按得到（門禁）。
  */
 export async function reimportJob(hash: string) {

@@ -113,7 +113,7 @@ class MediaView:
     folder_name: str
     #: 那串字已經定死了。畫面照它換掉整句說明——「將會是」與「就是」是兩件事。
     folder_frozen: bool
-    #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media，票 09 起是 `EXISTS(jobs)`）。
+    #: Berth 已經為這部作品做過事（`GLOSSARY.md` 的 Tracked Media，票 09 起是 `EXISTS(jobs)`）。
     tracked: bool
     #: 上次送單用的 Route，下拉的預選值（plan §2.2）。還沒送過單時是 `None`。
     default_route_id: int | None

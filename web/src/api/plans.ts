@@ -5,7 +5,7 @@ import type { Job } from './jobs'
 import { parseRefusal, type ReasonSet } from './refusal'
 import type { Schemas } from './schemas'
 
-/** 一份 Import Plan（`berth/api/plans.py` 的 `PlanOut`、CONTEXT.md）。 */
+/** 一份 Import Plan（`berth/api/plans.py` 的 `PlanOut`、GLOSSARY.md）。 */
 export type Plan = Schemas['PlanOut']
 
 /** Plan 裡一個檔案的決定。 */

@@ -28,7 +28,7 @@ class ScheduleCardOut(BaseModel):
     #: `tv:<tmdb>`，也是 `/media/:id` 的路徑段。
     media_id: str
     tmdb_id: int
-    #: Display Round：兩輪都送，畫面照 UI 語言挑（`CONTEXT.md`）。
+    #: Display Round：兩輪都送，畫面照 UI 語言挑（`GLOSSARY.md`）。
     title: str
     title_en: str
     #: 小海報的完整網址；沒有是空字串。

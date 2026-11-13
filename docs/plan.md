@@ -145,7 +145,7 @@ adapters ──► domain                  （不 import services、models；回
   - 被 Job、帳本或 RSS 綁定（Feed 的 `tv_route_id` / `movie_route_id`、RSS Series 的 `route_id`）引用的 Route 刪不得：Job 與 RSS 的外鍵是 `SET NULL`，刪得掉的話它們會無聲失去 Route；帳本沒有 Route 欄，靠 `target_path` 認（`owning_route`）。
 - `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`、`folder_frozen`、`default_route_id`、`tmdb_snapshot_json`、`tmdb_fetched_at`。
   - `tmdb_snapshot_json` 含**各季的 `name`**（`Hashira Training Arc` 這種篇章名是 §4.4 的季號來源）與各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在。型別化版本是 `domain/media.py` 的 `MediaSnapshot`（§4.3）——它住在 `domain/` 是因為 `naming` 與 `parser` 都要它，而那兩個依契約只 import `domain`（§1.3）。
-  - **點進詳情頁就會寫下一列**（快照要有地方放），所以有這一列不代表 Berth 為它做過任何事。「追蹤過」是**推導**出來的（`CONTEXT.md`）：有 Job、有帳本，或有 RSS Rule——不存成欄位。
+  - **點進詳情頁就會寫下一列**（快照要有地方放），所以有這一列不代表 Berth 為它做過任何事。「追蹤過」是**推導**出來的（`GLOSSARY.md`）：有 Job、有帳本，或有 RSS Rule——不存成欄位。
   - `folder_name` **跟著標題走**（畫面上它是「將會是」的預覽），每次刷新快照都重算；**第一次真的通向磁碟那一刻凍結**：手動送單成功時，或建 RSS Rule 時，兩個都有人在場、都要一次明確確認。凍結之後 refresh 一律不動它（§5、brief §4.5）。不拖到入庫才凍——importer 是背景迴圈，那時候沒有人看著。
   - 開關是 `folder_frozen`，**推導不出來**：送單失敗的 Job 也是一列 `jobs`，而那一刻磁碟上什麼都沒發生；刪掉那筆 Job 也不該讓資料夾名重新開始跟著 TMDB 跑。**送單那一步不刷新快照**（§8.3 的六小時規則留給 planning）：凍下去的必須就是使用者剛剛在確認畫面上看到的那一串字。
 - `tmdb_cache`：`key`（`discover:trending` / `discover:popular` / `search:<正規化查詢>`）、`value_json`（已經合併好的卡片陣列：tmdb id、kind、顯示用標題、英文標題、年份、完整海報網址）、`fetched_at`。探索頁與搜尋結果的短期快取，一小時；Media 詳情走 `media` 表。
@@ -512,7 +512,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
 ### 3.3 冪等與重入
 
 - `add_download`：同 hash 已存在 → 回傳既有 job，不重複送單。**那一筆是 `removed` 時拒絕**（409 `job_removed`，`detail` 是那一筆的 hash）：刪除過而紀錄還在就是還沒決定要不要再下載——回傳它的話送單的人以為成功了，而 RSS 下一輪看到同一個條目會再送、再拿回同一列。重新入庫，或連紀錄一起刪掉（`purge`）之後再送，兩者都是 admin 的事；清掉紀錄之後同一個 hash 是一筆新的下載。
-- importer：目標已存在且 inode 等於來源 → 視為已完成，補 ledger 若缺；目標存在但 inode 不同 → item 標 `error: target_unmanaged`（名稱照 CONTEXT.md 的 Unmanaged），進 review。
+- importer：目標已存在且 inode 等於來源 → 視為已完成，補 ledger 若缺；目標存在但 inode 不同 → item 標 `error: target_unmanaged`（名稱照 GLOSSARY.md 的 Unmanaged），進 review。
 - ledger 的 `target_path` unique；event 寫入用 `(job_hash, type, payload hash)` 在同一分鐘內去重，避免重啟後重複「completed」事件。**使用者按下的重試是界線**：之後發生的事就算與之前一模一樣也照寫。
 - Jellyfin 通知失敗只記 event，不阻擋 `imported`；resolver 之後會再嘗試。
 - **寫交易紀律**：SQLite 一次一個寫者，其他寫者最多等 `busy_timeout`（5 秒），否則 `database is locked`。**先拿 `job_lock`、再開寫；網路呼叫不在寫交易裡。** 寫交易從第一個 UPDATE / INSERT（含 autoflush 送出去的那一次）開始、到 commit 或 rollback 結束；它之前的改動只要還沒 flush 就不算。
@@ -922,7 +922,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 
 #### inventory
 
-名字叫 inventory 不叫 library：`CONTEXT.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端。判定規則全部在後端。背景見 [ADR-0004](adr/0004-library-browsing-and-discovery.md)。
+名字叫 inventory 不叫 library：`GLOSSARY.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端。判定規則全部在後端。背景見 [ADR-0004](adr/0004-library-browsing-and-discovery.md)。
 
 - `GET /inventory`：切換列。這位使用者 `UserViews` 裡的電影與劇集媒體庫，照他在 Jellyfin 排的順序，只有 id、名稱、類型與排序選單 `sorts`（照 jellyfin-web，劇集庫與電影庫不同），以及 `has_imports`（帳本至少一列落在指向它的 Route 底下，更深的 Route 底下的歸那一條；登入後落在哪一頁讀它）。不問 Jellyfin 的牆。
 - `GET /inventory/{library_id}/filters`：類型與年份篩選的選項（Jellyfin `/Items/Filters`），同樣先驗媒體庫。
@@ -971,7 +971,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - **集照播出日對 TMDB**（`inventory.match_episodes`）：
   - Jellyfin 那一集的 `PremiereDate` 差一天內、TMDB 只有一集的，就是那一集。特典只與特典比；一集 TMDB 被兩個 Jellyfin 的集對到時都不算；多集檔只算對到的那一集。Jellyfin 的季集號不算數。
   - 對不上的不算有（照舊缺、缺集搜尋照問），列在 `jellyfin_unmatched`（Jellyfin 的編號）；同編號的 TMDB 那一集 `jellyfin_maybe`，季表標「Jellyfin 可能有」。
-- `GET /media/{id}/why-not?season=&episode=`（`CONTEXT.md` 的 Why Not）：這部作品（季集一起給就是那一集）為什麼沒入庫，只讀資料庫。回：
+- `GET /media/{id}/why-not?season=&episode=`（`GLOSSARY.md` 的 Why Not）：這部作品（季集一起給就是那一集）為什麼沒入庫，只讀資料庫。回：
   - `conclusion`：`WhyNot` 十種，規則只在 `domain/why_not.py`；整部作品是各集裡最前面那一種。
   - `seasons`：季表每一季播出幾集、入庫幾集。
   - `episodes`：問一集就是那一集；問整部只列有事的那幾集（已入庫與還沒播的不列，第 0 季的「沒有來源」也不列）。每一集帶季表那一格 `status`、`conclusion`、蓋到它的 Job hash 與 Feed Item id。

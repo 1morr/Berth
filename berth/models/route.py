@@ -1,4 +1,4 @@
-"""Library Route：一個入庫目的地（CONTEXT.md、plan §2.2）。"""
+"""Library Route：一個入庫目的地（GLOSSARY.md、plan §2.2）。"""
 
 from __future__ import annotations
 

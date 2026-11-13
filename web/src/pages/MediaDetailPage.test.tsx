@@ -718,7 +718,7 @@ describe('Media 詳情頁', () => {
     expect(within(season).getByText('1 / 1 集入庫')).toBeVisible()
   })
 
-  it('S00 的檔案說的是特別篇，不是正片（CONTEXT.md：Specials 是 TMDB season 0）', async () => {
+  it('S00 的檔案說的是特別篇，不是正片（GLOSSARY.md：Specials 是 TMDB season 0）', async () => {
     render({
       [SPY_PATH]: { body: media({ files: [ledgerFile({ season: 0, episode_start: 3 })] }) },
     })

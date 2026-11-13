@@ -642,7 +642,7 @@ class TestReview:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """medium 自動入庫，但掛 `audit`——撤銷幾乎零成本，那是敢自動入庫的前提
-        （brief §6.5、CONTEXT.md 的 Audit）。"""
+        （brief §6.5、GLOSSARY.md 的 Audit）。"""
         media, route, factory = await ready(session, roots)
         job = await downloaded_job(session, media, route, roots, name=SINGLE, files=SINGLE_FILES)
 

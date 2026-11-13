@@ -58,7 +58,7 @@ export function serviceFix(row: ServiceHealth): 'bundled' | 'existing' | 'unconf
 /**
  * 套件內服務掛掉時的三條指令。順序就是排查順序：還在嗎、起來、它自己說了什麼。
  *
- * `kind` 直接當 compose 的服務名——CONTEXT.md 的 **Service** 就是這麼定的（「字串同時是
+ * `kind` 直接當 compose 的服務名——GLOSSARY.md 的 **Service** 就是這麼定的（「字串同時是
  * compose 的服務名」），所以不需要一張對照表。
  */
 export function composeCommands(kind: ServiceKind): readonly string[] {

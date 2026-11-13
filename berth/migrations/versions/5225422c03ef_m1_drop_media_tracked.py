@@ -1,6 +1,6 @@
 """拿掉 media.tracked（票 04b）。
 
-「追蹤」不是一個使用者動作，而是一個推導出來的結果（`CONTEXT.md`）：Berth 曾為這部作品
+「追蹤」不是一個使用者動作，而是一個推導出來的結果（`GLOSSARY.md`）：Berth 曾為這部作品
 下載、訂閱或入庫過。推導的來源（`jobs`、`ledger`、`rss_rules`）現在一張都還不存在，
 所以這個欄位留著只會永遠是 false。票 09 起以 `EXISTS(jobs)` 推導回來。
 

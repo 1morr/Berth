@@ -62,7 +62,7 @@
 
 ## 2. 名詞表（Ubiquitous Language）
 
-名詞表在 repo 根目錄的 `CONTEXT.md`（單一來源，含每個詞的定義與應避免的同義詞）。實作、UI、文件與 API 一律使用那裡的詞。本文件後續章節出現的 Media、Library Route、Download Job、Import Plan、Ledger Entry、Review Queue、Unmatched、Extras、Issue、Event 等，定義以 `CONTEXT.md` 為準。
+名詞表在 repo 根目錄的 `GLOSSARY.md`（單一來源，含每個詞的定義與應避免的同義詞）。實作、UI、文件與 API 一律使用那裡的詞。本文件後續章節出現的 Media、Library Route、Download Job、Import Plan、Ledger Entry、Review Queue、Unmatched、Extras、Issue、Event 等，定義以 `GLOSSARY.md` 為準。
 
 ---
 
