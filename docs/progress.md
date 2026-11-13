@@ -1,41 +1,16 @@
 # 進度
 
-工作單位是票（`.scratch/<里程碑>/issues/NN-slug.md`），狀態在票的 `Status:` 行。這裡只記各里程碑的閱讀指引、session 紀錄、偏差與決定。
+工作單位是票（`.scratch/<里程碑>/issues/NN-slug.md`），狀態在票的 `Status:` 行。這裡只記進行中里程碑的 session 紀錄；里程碑的順序、狀態與閱讀指引在 `docs/roadmap.md`，決定在 `docs/decisions.md`。
 
-M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session 紀錄與偏差在 `docs/archive/<里程碑>.md`（`m0`、`m1`、`m1.5`、`m2`、`m3`、`m4`、`m5`）；舊文件與舊票指到「progress.md 的偏差與決定」的，到那裡找。
-
-M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
-M5.6（AI 對話精簡）也已驗收，封存於 `docs/archive/m5.6.md`。
-
-## 里程碑與閱讀指引
-
-| 里程碑 | 票目錄 | 拆票前讀 | 備註 |
-| --- | --- | --- | --- |
-| M0 | `.scratch/m0/issues/` | — | 已驗收（2026-09-08），封存於 `docs/archive/m0.md` |
-| M1 | `.scratch/m1/issues/` | — | 已驗收（2026-09-17），封存於 `docs/archive/m1.md` |
-| M1.5 | `.scratch/m1.5/issues/` | — | 已驗收（2026-09-19），封存於 `docs/archive/m1.5.md` |
-| M2 | `.scratch/m2/issues/` | — | 已驗收（2026-09-24），封存於 `docs/archive/m2.md` |
-| M3 | `.scratch/m3/issues/` | — | 已驗收（2026-09-26），封存於 `docs/archive/m3.md` |
-| M4 | `.scratch/m4/issues/` | — | 已驗收（2026-10-23），封存於 `docs/archive/m4.md` |
-| M5 | `.scratch/m5/issues/` | — | 已驗收（2026-10-28），封存於 `docs/archive/m5.md` |
-| M5.5 | `.scratch/m5.5/issues/` | — | 已驗收（2026-11-04），封存於 `docs/archive/m5.5.md` |
-| M5.6 | `.scratch/m5.6/issues/` | — | 已驗收（2026-11-08），封存於 `docs/archive/m5.6.md` |
-| M6 | `.scratch/m6/issues/` | plan §11.7；brief §14、§6.10、§20.29 | 人工接管開關、第一批背景 AI 任務、AI 評估；先修 M5.6 遺留並發 0.5.2（2026-11-10 拆出 M6.5） |
-| M6.5 | `.scratch/m6.5/issues/` | plan §11.7b；brief §14 | Issue 與每週巡檢交給 AI、修正回流（2026-11-10 從 M6 拆出） |
-| M7 | `.scratch/m7/issues/` | plan §11.8；brief §14、§16.2 | Discord 與 MCP（2026-09-22 加入、09-24 加 MCP、10-27 改名） |
-| docs-diet | `.scratch/docs-diet/issues/` | — | 已驗收（2026-10-30），封存於 `docs/archive/docs-diet.md` |
-
-開工：使用者在新 session 下 `/to-tickets docs/plan.md 拆 <里程碑> 的票`，那個 session 寫 `.scratch/<里程碑>/spec.md`、把 plan §11 那一節縮成連結、拆票，步驟在 `CLAUDE.md`〈Skills〉。沒開工的里程碑只在 plan §11；開工後以 spec 與票為準。
+已驗收的里程碑，session 紀錄與當時的偏差在 `docs/archive/<里程碑>.md`；舊文件與舊票指到「progress.md 的偏差與決定」的，到那裡找。
 
 ## 寫法與封存
 
-- 做票的分支不改本檔：票的 Comments 留 `Session 紀錄：` 與 `偏差：` 行，合併的人在 main 抄成這裡的一列與一條（`CLAUDE.md`〈每個 session 的流程〉第 5 步）；驗收票例外。
-- session 紀錄一列、偏差一條都 ≤ 200 字（整行的字元數，Python `len`）。細節放票的 `## Comments` 或 `docs/research/`，這裡只寫結論與連結。
-- 每列、每條標里程碑：票欄寫 `<里程碑> <票號> <短標題>`（沒有票的工作省略票號），偏差寫 `- <日期> <里程碑> 票 <NN>：…`。
-- 偏差只記跨票的決定：推翻 plan / brief、改流程、影響後續的票。票內取捨記在票的 `## Comments`。
-- 偏差標決定者（2026-11-12 起）：`（使用者定）` 使用者自己定的、`（使用者同意）` agent 提議而使用者同意的、`（Agent 定）` 使用者沒看過的；`/1morr:checkpoint` 會把 `（Agent 定）` 拿給使用者看。
-- 大小：整檔 ≤ 20,000 字（`CLAUDE.md` ≤ 8,000 字），由 `tests/unit/test_reading_budget.py` 守。超過時，把進行中里程碑較舊的列與條也封存到 `docs/archive/<里程碑>.md`（同下面的做法），不要縮短措辭湊數。
-- 只留進行中的里程碑：驗收票收尾時，把那個里程碑的列與條搬到 `docs/archive/<里程碑>.md`，用 `scripts/docs_moved_lines.py` 證明沒丟（遺失 0），里程碑表那一列改成「已驗收（日期），封存於 `docs/archive/<里程碑>.md`」。封存後 session 紀錄加一列，票欄標下一個里程碑（`<里程碑> 準備`），「下一步」寫 `/1morr:checkpoint <封存的里程碑>`（它結束時再寫下一個里程碑的開工指令），否則封存會把下一步一起搬走；沒有下一個里程碑時，紀錄留空，只在對話告訴使用者。
+- 做票的分支不改本檔與 `docs/decisions.md`：票的 Comments 留 `Session 紀錄：` 與 `決定：` 行，合併的人在 main 抄成這裡的一列與 decisions.md 的一條（`CLAUDE.md`〈每個 session 的流程〉第 5 步）；驗收票例外。
+- 一列 ≤ 200 字（整行的字元數，Python `len`）。細節放票的 `## Comments` 或 `docs/research/`，這裡只寫結論與連結。
+- 票欄標里程碑：`<里程碑> <票號> <短標題>`（沒有票的工作省略票號）。
+- 大小：整檔 ≤ 20,000 字（`CLAUDE.md` ≤ 8,000 字），由 `tests/unit/test_reading_budget.py` 守。超過時，把進行中里程碑較舊的列也封存到 `docs/archive/<里程碑>.md`（同下面的做法），不要縮短措辭湊數。
+- 只留進行中的里程碑：驗收票收尾時，把那個里程碑的列搬到 `docs/archive/<里程碑>.md`，用 `scripts/docs_moved_lines.py` 證明沒丟（遺失 0），`docs/roadmap.md` 里程碑表那一列的狀態改成「已驗收（日期），封存於 `docs/archive/<里程碑>.md`」。封存後 session 紀錄加一列，票欄標下一個里程碑（`<里程碑> 準備`），「下一步」寫 `/1morr:checkpoint <封存的里程碑>`（它結束時再寫下一個里程碑的開工指令），否則封存會把下一步一起搬走；沒有下一個里程碑時，紀錄留空，只在對話告訴使用者。決定留在 `docs/decisions.md`，不跟著封存。
 - 「下一步」寫新 session 要下的完整指令（反引號包住、`/` 開頭），或以 `等使用者：` 開頭；`tests/unit/test_progress_rules.py` 查最後一列。
 
 ## Session 紀錄
@@ -52,19 +27,4 @@ M5.6（AI 對話精簡）也已驗收，封存於 `docs/archive/m5.6.md`。
 | 2026-11-12 | M6 回顧 M5.6 | 回顧 M5.6，確認的 8 項寫回 spec 與票 01–03、05、06、08、11（見偏差）；補記兩條 M5.6 偏差、plan §11.9 加兩項 | 新 session 下 `/implement .scratch/m6/issues/01-subscribe-picks-season.md` |
 | 2026-11-12 | M6 流程 | 拿掉 `docs/overview/`，改用 `/1morr:explain` 出臨時解說頁；brief、plan、ADR 0011、CONTEXT、程式註解對齊程式碼 | 新 session 下 `/implement .scratch/m6/issues/01-subscribe-picks-season.md` |
 | 2026-11-13 | M6 流程 | 對齊 project-init：票留 Session 紀錄由合併的人寫本檔、驗收票加使用者試、提問寫法；章節號引用與票號只減不增；路線圖與瘦身排在 M6 之後（plan §11.9） | 新 session 下 `/implement .scratch/m6/issues/01-subscribe-picks-season.md` |
-
-## 偏差與決定
-
-實作中推翻 plan / brief 的事，一行一條，附 commit hash 與改動的章節。
-
-- 2026-10-31 M6 流程：M6 起 spec 由開工 session 寫到 `.scratch/<里程碑>/spec.md`，plan §11 對應節縮成一行連結、編號不變（改 plan §11 導言、`CLAUDE.md`〈Skills〉）；M0–M5 與 docs-diet 不補。
-- 2026-11-10 M6 範圍：Issue 各型別、每週巡檢交給 AI、修正回流移到新的 M6.5（使用者定）；影子一致率門檻 ≥ 90%、至少 20 件；訂閱挑季修完先發 0.5.2。改 plan §11.7、§11.7b、brief §14、§17、`PRODUCT.md`。
-- 2026-11-10 M6 AI 評估：使用者不在頁面上逐件處理，影子模式量不出一致率，拿掉；開關改人 / AI 兩段，驗收改成凍在 repo 的案例集上套用錯 0 件、交回人的比例下降（推翻同日的 ≥ 90% 門檻）。背景任務答「資料不夠」才給限網域的唯讀網搜。改 plan §4.5、§11.7、§11.7b、brief §6.10、§14、ADR 0008、`CONTEXT.md`。
-- 2026-11-10 M6.5 範圍：補進 M6 第一批漏列的重複版本（保留兩者、跳過自動，取代做 Proposal）與 C1 表沒有的 `episodes_overdue`（使用者定）；M6 的第一批確認寫明「證據夠就確認整批」。改 plan §11.7、§11.7b、brief §14。
-- 2026-11-11 M6 送下載的閘：背景任務叫帶 `Flag.DOWNLOADS` 的命令時，一次超過 13 個 torrent 或磁碟不夠改 Proposal；AI 評估件數分級，會送下載的至少 60 件、其餘 20 件（使用者定）。改 plan §11.7、§11.7b、brief §14。
-- 2026-11-11 M6 片長進資料包：背景任務的檔案清單帶 mediainfo 量到的片長與大小、TMDB 每集帶 `runtime`，片長偏離同組的檔案單獨送，不壓進樣本。改 plan §4.5、brief §6.10。
-- 2026-11-11 M6 拆票：第一批五種任務併成四型——程式檢查擋在入庫前的兩種併進「審核中的 Plan」，Jellyfin 回驗的不符併進「audit 與第一批」；評估與第二段網搜同一張；開關預設人，評估達標才放上設定頁。改 spec〈範圍〉。
-- 2026-11-12 M6 評估門檻：案例本來全部要人處理，「交回人的比例比規則層低」等於處理掉 1 件就過；改成交回人 < 5%（AI 處理 95% 以上），太難再改（使用者定）。改 spec〈AI 評估〉〈驗收〉、票 06、08–10、brief §17、plan §11.7b。
-- 2026-11-12 M6 M5.6 回顧：先止血發 0.5.2（多季作品卡片問季）、核准照用卡片帶的番組 id；評估門檻改 ≤ 5%、案例集組成在票 06 重定；一般使用者拿回 `recommend`（使用者同意）。改 spec〈範圍〉〈AI 評估〉、票 01–03、05、06、08、11、brief §17、plan §11.7b。
-- 2026-11-13 M6 流程（使用者同意）：做票的分支不改 progress.md，合併的人照票的 `Session 紀錄：` 行寫；驗收票封存前先給使用者試。改 `CLAUDE.md`、本檔〈寫法與封存〉、票 12。
-- 2026-11-13 M6 流程（Agent 定）：M6 spec〈驗收〉的「使用者試」四項是對齊流程時補的草稿，使用者還沒看過；票 12 開做前確認。
+| 2026-11-13 | M6 流程 | 路線圖、決定、brief §20 的事實搬出 plan、progress、brief（見 `CLAUDE.md`〈文件〉）；瘦身的票在 `.scratch/docs-diet-2/` | 新 session 下 `/implement .scratch/m6/issues/01-subscribe-picks-season.md` |

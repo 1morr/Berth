@@ -1,13 +1,13 @@
 """`.scratch/` 下沒驗收的目錄，都是開工 session 做完三步的結果（`CLAUDE.md`〈Skills〉）。
 
 - 同時有含五段的 `spec.md` 和 `issues/` 裡至少一張票：擋掉「有票沒 spec」和「還沒開工就預建 spec」。
-- 它在 plan §11 的那一節縮成一行、連到 spec：內容只留一份，標題與編號留給程式碼引用。
-  不在 §11 的目錄（docs-diet 這類）沒有這一節，不查。
-- 在 §11 有一節的里程碑，`issues/` 裡有一張 `-acceptance.md` 結尾的驗收票；只看有沒有，
+- 它在 `docs/roadmap.md` 的那一節縮成一行、連到 spec：內容只留一份。
+  roadmap 裡沒有這一節的目錄（docs-diet 這類）不查。
+- 在 roadmap 有一節的里程碑，`issues/` 裡有一張 `-acceptance.md` 結尾的驗收票；只看有沒有，
   不看編號（驗收後補的票照樣放行）。它的 spec 有一個「使用者試」標題：驗收票封存前
   使用者要親手試的清單（`CLAUDE.md`〈每個 session 的流程〉第 5 步）。
 
-「已驗收」與目錄名都讀 `docs/progress.md` 的里程碑表：M0–M5 與 docs-diet 是歷史快照，
+「已驗收」與目錄名都讀 `docs/roadmap.md` 的里程碑表：M0–M5 與 docs-diet 是歷史快照，
 新增里程碑不必改這裡。只比段落標題與連結，不比措辭；標題層級、多的段落、旁邊的 shape 檔
 都不影響結果。
 """
@@ -21,25 +21,26 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".scratch"
-PROGRESS = ROOT / "docs" / "progress.md"
-PLAN = ROOT / "docs" / "plan.md"
+ROADMAP = ROOT / "docs" / "roadmap.md"
 SPEC_SECTIONS = ("目標", "範圍", "共同規則", "驗收", "票序")
 USER_TRIAL = "使用者試"
 _TABLE_ROW = re.compile(
-    r"^\|\s*(\S+)\s*\|\s*`\.scratch/([^/`]+)/[^|]*\|[^|]*\|\s*(.*?)\s*\|\s*$", re.M
+    r"^\|\s*(\S+)\s*\|[^|]*\|\s*`\.scratch/([^/`]+)/[^|]*\|[^|]*\|\s*(.*?)\s*\|\s*$", re.M
 )
 _HEADING = re.compile(r"^#+\s+(.+?)\s*$", re.M)
 
 
-def _plan_section(plan: str, milestone: str) -> str | None:
+def _roadmap_section(roadmap: str, milestone: str) -> str | None:
     match = re.search(
-        rf"^### 11\.\S+ {re.escape(milestone)} .*?\n(.*?)(?=^##|\Z)", plan, flags=re.M | re.S
+        rf"^## {re.escape(milestone)} .*?\n(.*?)(?=^## |\Z)", roadmap, flags=re.M | re.S
     )
     return match.group(1) if match else None
 
 
-def problems(scratch: Path, progress: str, plan: str) -> list[str]:
-    rows = _TABLE_ROW.findall(progress)
+def problems(scratch: Path, roadmap: str, sections: str | None = None) -> list[str]:
+    """`sections` 是放各里程碑小節的文字，預設就是 roadmap（測試用假的小節配真的里程碑表）。"""
+    sections = roadmap if sections is None else sections
+    rows = _TABLE_ROW.findall(roadmap)
     accepted = {directory for _, directory, note in rows if note.startswith("已驗收")}
     milestones = {directory: name for name, directory, _ in rows}
     found: list[str] = []
@@ -58,7 +59,7 @@ def problems(scratch: Path, progress: str, plan: str) -> list[str]:
             found.append(f"{name} 沒有 spec.md")
         if not any((directory / "issues").glob("*.md")):
             found.append(f"{name}/issues/ 沒有票")
-        section = _plan_section(plan, milestones.get(name, name))
+        section = _roadmap_section(sections, milestones.get(name, name))
         if section is not None and not any((directory / "issues").glob("*-acceptance.md")):
             found.append(f"{name}/issues/ 沒有驗收票：里程碑最後一張是 NN-{name}-acceptance.md")
         if section is not None and spec.is_file() and USER_TRIAL not in headings:
@@ -66,25 +67,24 @@ def problems(scratch: Path, progress: str, plan: str) -> list[str]:
         if section is not None:
             body = [line for line in section.splitlines() if line.strip()]
             if len(body) != 1 or f".scratch/{name}/spec.md" not in body[0]:
-                found.append(f"plan §11 裡 {name} 那一節沒有縮成一行連到 spec")
+                found.append(f"roadmap 裡 {name} 那一節沒有縮成一行連到 spec")
     return found
 
 
 def test_scratch_directories_follow_the_kickoff() -> None:
-    progress = PROGRESS.read_text(encoding="utf-8")
-    assert problems(SCRATCH, progress, PLAN.read_text(encoding="utf-8")) == []
+    assert problems(SCRATCH, ROADMAP.read_text(encoding="utf-8")) == []
 
 
 class TestTheGateItself:
-    """違規會紅，無關的格式改動不會。里程碑表用真的，目錄樹與 plan 是假的。"""
+    """違規會紅，無關的格式改動不會。里程碑表用真的，目錄樹與各里程碑的小節是假的。"""
 
     PLAN_DONE = (
-        "### 11.7 M6 人工接管開關\n\n內容在 `.scratch/m6/spec.md`。\n\n"
-        "### 11.8 M7 Discord 與 MCP\n\n範圍：還沒開工。\n驗收：還沒開工。\n"
+        "## M6 人工接管開關\n\n內容在 `.scratch/m6/spec.md`。\n\n"
+        "## M7 Discord 與 MCP\n\n範圍：還沒開工。\n驗收：還沒開工。\n"
     )
 
     def progress(self) -> str:
-        return PROGRESS.read_text(encoding="utf-8")
+        return ROADMAP.read_text(encoding="utf-8")
 
     def kicked_off(self, scratch: Path, name: str = "m6", acceptance: bool = True) -> Path:
         directory = scratch / name
@@ -177,7 +177,9 @@ class TestTheGateItself:
         self.kicked_off(tmp_path)
         assert self.check(tmp_path) == []
 
-    def test_a_directory_outside_plan_11_only_needs_spec_and_tickets(self, tmp_path: Path) -> None:
+    def test_a_directory_outside_the_roadmap_sections_only_needs_spec_and_tickets(
+        self, tmp_path: Path
+    ) -> None:
         spec = self.kicked_off(tmp_path, "someday", acceptance=False) / "spec.md"
         text = spec.read_text(encoding="utf-8").replace(f"### {USER_TRIAL}\n\n無。\n\n", "")
         spec.write_text(text, encoding="utf-8")
